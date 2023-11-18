@@ -51,4 +51,5 @@ dev = [
     "pylint",
     "ruff",
     "black",
+    "flake8",
 ]
