@@ -29,7 +29,7 @@ testpaths = [
 
 [tool.mypy]
 files = "graphite_maps"
-python_version = 3.8
+python_version = 3.9
 show_error_codes = true
 pretty = true
 
@@ -41,7 +41,7 @@ authors = [{name = "Berent Lunde"}]
 dependencies = [
     "matplotlib",
     "scipy",
-    "sksparse",
+    "scikit-sparse",
 ]
 
 [project.optional-dependencies]
