@@ -16,7 +16,7 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install SuiteSparse (dependency for sksparse)
+    - name: Install SuiteSparse (dependency for scikit-sparse)
       run: sudo apt-get install -y libsuitesparse-dev
     - name: Install dependencies
       run: |

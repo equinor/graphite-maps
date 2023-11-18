@@ -41,7 +41,7 @@ authors = [{name = "Berent Lunde"}]
 dependencies = [
     "matplotlib",
     "scipy",
-    "sksparse",
+    "scikit-sparse",
 ]
 
 [project.optional-dependencies]
