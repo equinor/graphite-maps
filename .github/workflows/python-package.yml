@@ -22,10 +22,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install .[dev]  # Install package along with dev dependencies
+    - name: Clean up build directory
+      run: rm -rf ./build
     - name: Run Linters and Formatters
       run: |
         black --check .
-        mypy . --exclude './build/'
+        mypy .
         flake8 .
     - name: Run Tests
       run: |
