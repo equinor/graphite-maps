@@ -25,6 +25,7 @@ jobs:
     - name: Run Linters and Formatters
       run: |
         black --check .
+        mypy . --exclude '/build/'
         mypy .
         flake8 .
     - name: Run Tests
