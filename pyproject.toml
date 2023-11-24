@@ -32,6 +32,7 @@ files = "graphite_maps"
 python_version = 3.9
 show_error_codes = true
 pretty = true
+ignore_missing_imports = true
 
 [project]
 name = "graphite-maps"
@@ -43,6 +44,7 @@ dependencies = [
     "scipy",
     "scikit-sparse",
     "networkx",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
