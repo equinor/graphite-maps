@@ -1,7 +1,9 @@
 from typing import Optional
 import numpy as np
-from scipy.sparse import spmatrix  # type: ignore
+from scipy.sparse import spmatrix
 import networkx as nx  # type: ignore
+
+from .precision_estimation import fit_precision_cholesky
 
 
 class EnIF:
@@ -53,8 +55,7 @@ class EnIF:
 
     # Low-level API methods
     def fit_precision(self, U: np.ndarray) -> None:
-        # Implement fitting precision matrix logic here
-        pass
+        self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
     def fit_H(self, U: np.ndarray, Y: np.ndarray) -> np.ndarray:
         # Placeholder implementation to satisfy type-hinting
