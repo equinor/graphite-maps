@@ -1,16 +1,53 @@
 from typing import Optional
 import numpy as np
 from scipy.sparse import spmatrix
+from scipy.sparse.linalg import spsolve
 import networkx as nx  # type: ignore
 
 from .precision_estimation import fit_precision_cholesky
+
+from scipy.sparse.linalg import inv
+from numpy.random import multivariate_normal
+
+
+def perturb_d(d, Prec_eps):
+    """
+    Perturbs the array 'd' by adding Gaussian noise with precision 'Prec_eps'.
+
+    Parameters
+    ----------
+    d : np.ndarray
+        The original array to be perturbed.
+    Prec_eps : scipy.sparse.csc_matrix
+        The precision matrix for the Gaussian noise.
+
+    Returns
+    -------
+    np.ndarray
+        The perturbed array.
+    """
+    # Compute the covariance matrix (inverse of the precision matrix)
+    p, _ = Prec_eps.shape
+    Cov_eps = inv(Prec_eps).reshape(p, p)
+
+    # The length of the noise vector
+    length = d.shape[0]
+
+    # Sample noise from a multivariate normal distribution
+    eps = multivariate_normal(mean=np.zeros(length), cov=Cov_eps)
+
+    # Add the noise to 'd'
+    d_perturbed = d + eps
+
+    return d_perturbed
 
 
 class EnIF:
     def __init__(
         self,
-        Prec_u: Optional[spmatrix],
-        Graph_u: Optional[nx.Graph],
+        *,
+        Prec_u: Optional[spmatrix] = None,
+        Graph_u: Optional[nx.Graph] = None,
         Prec_eps: Optional[spmatrix],
         H: Optional[spmatrix] = None,
     ) -> None:
@@ -36,14 +73,14 @@ class EnIF:
         if self.Prec_u is None:
             self.fit_precision(U)
         elif verbose:
-            print("Precision u exists. Use `fit_precision` to refit")
-        if self.H is None:
-            assert (
-                Y is not None
-            ), "Y = h(U) response must be provided if H is not passed on init"
+            print(
+                "Precision u exists. Use `fit_precision` to refit if necessary"
+            )
+        if Y is not None:
+            assert self.H is None, "Y should not be provided if H exists"
             self.H = self.fit_H(U, Y)
         elif verbose:
-            print("H mapping exists. Use `fit_H` to refit")
+            print("H mapping exists. Use `fit_H` to refit if necessary")
 
     def transport(self, U: np.ndarray, d: np.ndarray) -> np.ndarray:
         """
@@ -65,14 +102,43 @@ class EnIF:
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
         # TODO: Replace with actual pushforward logic
-        return np.array([])
+        assert self.Prec_u is not None, "Precision must exist to pushforward"
+
+        n, p = U.shape
+        Nu = np.empty((n, p))
+        for i in range(n):
+            Nu[i, :] = self.Prec_u @ U[i, :]
+        return Nu
 
     def update_canonical(
         self, canonical: np.ndarray, d: np.ndarray
     ) -> np.ndarray:
-        # TODO: Replace with actual update canonical logic
-        return np.array([])
+        assert self.H is not None, "H must be provided of fitted"
+        assert self.Prec_u is not None, "Precision must be provided of fitted"
 
-    def pullback_from_canonical(self, updated: np.ndarray) -> np.ndarray:
-        # TODO: Replace with actual pollback logic
-        return np.array([])
+        # posterior nu
+        n, p = canonical.shape
+        updated_canonical = np.empty((n, p))
+        for i in range(n):
+            d_perturbed = perturb_d(d, self.Prec_eps)
+            updated_canonical[i:,] = (
+                canonical[i:,] + self.H.T @ self.Prec_eps @ d_perturbed
+            )
+
+        # posterior precision
+        self.Prec_u = self.Prec_u + self.H.T @ self.Prec_eps @ self.H
+
+        return updated_canonical
+
+    def pullback_from_canonical(
+        self, updated_canonical: np.ndarray
+    ) -> np.ndarray:
+        n, p = updated_canonical.shape
+        updated_moment = np.empty((n, p))
+        for i in range(n):
+            # here we can likely use chol-solve repeatedly!!!
+            updated_moment[i, :] = spsolve(
+                self.Prec_u, updated_canonical[i, :]
+            )
+
+        return updated_moment
