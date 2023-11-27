@@ -2,13 +2,11 @@ from typing import Optional
 import numpy as np
 from scipy.sparse import spmatrix
 from scipy.sparse.linalg import spsolve
-import networkx as nx  # type: ignore
+from sksparse.cholmod import cholesky
+import networkx as nx
 
 from .precision_estimation import fit_precision_cholesky
 from .linear_regression import linear_l1_regression
-
-from scipy.sparse.linalg import inv
-from numpy.random import multivariate_normal
 
 
 def perturb_d(d, Prec_eps):
@@ -27,15 +25,15 @@ def perturb_d(d, Prec_eps):
     np.ndarray
         The perturbed array.
     """
-    # Compute the covariance matrix (inverse of the precision matrix)
-    p, _ = Prec_eps.shape
-    Cov_eps = inv(Prec_eps).reshape(p, p)
+    # Perform sparse Cholesky decomposition of the precision matrix
+    cholesky_factor = cholesky(Prec_eps)
 
-    # The length of the noise vector
-    length = d.shape[0]
+    # Sample from a standard normal distribution
+    standard_normal_samples = np.random.normal(size=d.shape)
 
-    # Sample noise from a multivariate normal distribution
-    eps = multivariate_normal(mean=np.zeros(length), cov=Cov_eps)
+    # Transform the samples using the inverse Cholesky factor
+    # This transformation results in samples from N(0, Prec_eps^-1)
+    eps = cholesky_factor.solve_A(standard_normal_samples)
 
     # Add the noise to 'd'
     d_perturbed = d + eps
@@ -132,14 +130,10 @@ class EnIF:
     def pullback_from_canonical(
         self, updated_canonical: np.ndarray
     ) -> np.ndarray:
-        n, p = updated_canonical.shape
-        # This implementation can be improved using pre-computed (sparse)
-        # AMD-optimized cholesky factor of precision matrix
-        updated_moment = np.empty((n, p))
-        for i in range(n):
-            # here we can likely use chol-solve repeatedly!!!
-            updated_moment[i, :] = spsolve(
-                self.Prec_u, updated_canonical[i, :]
-            )
+        # Compute the Cholesky factorization (only once)
+        factor = cholesky(self.Prec_u)
+
+        # Use the Cholesky factor to solve Prec Nu = U
+        updated_moment = factor.solve_A(updated_canonical.T).T
 
         return updated_moment
