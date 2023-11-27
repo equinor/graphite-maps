@@ -25,8 +25,8 @@ def linear_l1_regression(U, Y):
     Returns
     -------
     H_sparse : scipy.sparse.csc_matrix
-        Sparse matrix (n_responses, n_features) with re-scaled LASSO
-        regression coefficients for each response in Y.
+        Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
+        each response in Y.
 
     Raises
     ------
@@ -40,15 +40,18 @@ def linear_l1_regression(U, Y):
     # Assert that the first dimension of U and Y are the same
     assert n == n_y, "Number of samples in U and Y must be the same"
 
-    scaler = StandardScaler()
-    U_scaled = scaler.fit_transform(U)
+    scaler_u = StandardScaler()
+    U_scaled = scaler_u.fit_transform(U)
+
+    scaler_y = StandardScaler()
+    Y_scaled = scaler_y.fit_transform(Y)
 
     # Loop over features
     i_H, j_H, values_H = [], [], []
     for j in tqdm(
         range(m), desc="Learning sparse linear map for each response"
     ):
-        y_j = Y[:, j]
+        y_j = Y_scaled[:, j]
 
         # Learn individual regularization and fit
         eps = 1e-3
@@ -63,7 +66,9 @@ def linear_l1_regression(U, Y):
             i_H.append(j)
             j_H.append(non_zero_ind)
             values_H.append(
-                model_cv.coef_[non_zero_ind] / scaler.scale_[non_zero_ind]
+                scaler_y.scale_[j]
+                * model_cv.coef_[non_zero_ind]
+                / scaler_u.scale_[non_zero_ind]
             )
 
     values_H, i_H, j_H = np.array(values_H), np.array(i_H), np.array(j_H)
