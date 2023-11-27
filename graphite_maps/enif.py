@@ -1,7 +1,6 @@
 from typing import Optional
 import numpy as np
 from scipy.sparse import spmatrix
-from scipy.sparse.linalg import spsolve
 from sksparse.cholmod import cholesky
 import networkx as nx
 
