@@ -5,6 +5,7 @@ from scipy.sparse.linalg import spsolve
 import networkx as nx  # type: ignore
 
 from .precision_estimation import fit_precision_cholesky
+from .linear_regression import linear_l1_regression
 
 from scipy.sparse.linalg import inv
 from numpy.random import multivariate_normal
@@ -95,9 +96,7 @@ class EnIF:
         self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
     def fit_H(self, U: np.ndarray, Y: np.ndarray) -> np.ndarray:
-        # Placeholder implementation to satisfy type-hinting
-        H_fitted = np.array([])  # Empty array as a placeholder
-        # TODO: Replace with actual LASSO logic
+        H_fitted = linear_l1_regression(U, Y)
         return H_fitted
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
@@ -134,6 +133,8 @@ class EnIF:
         self, updated_canonical: np.ndarray
     ) -> np.ndarray:
         n, p = updated_canonical.shape
+        # This implementation can be improved using pre-computed (sparse)
+        # AMD-optimized cholesky factor of precision matrix
         updated_moment = np.empty((n, p))
         for i in range(n):
             # here we can likely use chol-solve repeatedly!!!

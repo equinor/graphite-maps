@@ -42,6 +42,7 @@ authors = [{name = "Berent Lunde"}]
 dependencies = [
     "matplotlib",
     "scipy",
+    "scikit-learn",
     "scikit-sparse",
     "networkx",
     "tqdm",
