@@ -136,11 +136,11 @@ class EnIF:
         self, updated_canonical: np.ndarray
     ) -> np.ndarray:
         """
-        Solve u = Prec nu
+        Solve u = Prec * nu
         """
         # Compute sparse Cholesky factorization
         factor = cholesky(self.Prec_u)
-        # Use the Cholesky factor to solve Prec Nu = U
+        # Use the Cholesky factor to solve u = Prec * nu
         updated_moment = factor.solve_A(updated_canonical.T).T
 
         return updated_moment
