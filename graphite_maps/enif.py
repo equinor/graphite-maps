@@ -8,7 +8,7 @@ from .precision_estimation import fit_precision_cholesky
 from .linear_regression import linear_l1_regression
 
 
-def perturb_d(d, Prec_eps):
+def perturb_d(d: np.ndarray, Prec_eps: spmatrix) -> np.ndarray:
     """
     Perturbs the array 'd' by adding Gaussian noise with precision 'Prec_eps'.
 
@@ -53,7 +53,6 @@ class EnIF:
             Prec_u is not None or Graph_u is not None
         ), "Provide either Prec_u or Graph_u"
 
-        # Initialize your attributes here
         self.Prec_u = Prec_u
         self.Graph_u = Graph_u
         self.Prec_eps = Prec_eps
@@ -76,7 +75,7 @@ class EnIF:
             )
         if Y is not None:
             assert self.H is None, "Y should not be provided if H exists"
-            self.H = self.fit_H(U, Y)
+            self.fit_H(U, Y)
         elif verbose:
             print("H mapping exists. Use `fit_H` to refit if necessary")
 
@@ -90,25 +89,32 @@ class EnIF:
 
     # Low-level API methods
     def fit_precision(self, U: np.ndarray) -> None:
+        """
+        Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
+        """
         self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
-    def fit_H(self, U: np.ndarray, Y: np.ndarray) -> np.ndarray:
-        H_fitted = linear_l1_regression(U, Y)
-        return H_fitted
+    def fit_H(self, U: np.ndarray, Y: np.ndarray):
+        """
+        Estimate H from data U using (sparse) linear regression
+        """
+        self.H = linear_l1_regression(U, Y)
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
-        # TODO: Replace with actual pushforward logic
+        """
+        Map each realization u in U to canonical space nu = Prec * u
+        """
         assert self.Prec_u is not None, "Precision must exist to pushforward"
-
-        n, p = U.shape
-        Nu = np.empty((n, p))
-        for i in range(n):
-            Nu[i, :] = self.Prec_u @ U[i, :]
+        Nu = (self.Prec_u @ U.T).T
+        assert Nu.shape == U.shape, "Nu preserves the shape of U"
         return Nu
 
     def update_canonical(
         self, canonical: np.ndarray, d: np.ndarray
     ) -> np.ndarray:
+        """
+        Use information-filter equations to update (nu, Prec) using perturbed d
+        """
         assert self.H is not None, "H must be provided of fitted"
         assert self.Prec_u is not None, "Precision must be provided of fitted"
 
@@ -129,10 +135,12 @@ class EnIF:
     def pullback_from_canonical(
         self, updated_canonical: np.ndarray
     ) -> np.ndarray:
-        # Compute the Cholesky factorization (only once)
+        """
+        Solve u = Prec * nu
+        """
+        # Compute sparse Cholesky factorization
         factor = cholesky(self.Prec_u)
-
-        # Use the Cholesky factor to solve Prec Nu = U
+        # Use the Cholesky factor to solve u = Prec * nu
         updated_moment = factor.solve_A(updated_canonical.T).T
 
         return updated_moment
