@@ -1,5 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
+from scipy.stats import chi2
+from scipy.integrate import quad
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
@@ -68,6 +70,190 @@ def linear_l1_regression(U, Y):
             values_H.append(
                 scaler_y.scale_[j]
                 * model_cv.coef_[non_zero_ind]
+                / scaler_u.scale_[non_zero_ind]
+            )
+
+    values_H, i_H, j_H = np.array(values_H), np.array(i_H), np.array(j_H)
+    H_sparse = sp.csc_matrix((values_H, (i_H, j_H)), shape=(m, p))
+
+    # Assert shape of H_sparse
+    assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
+
+    return H_sparse
+
+
+def expected_max_chisq(p):
+    """Expected maximum of p central chi-square(1) random variables"""
+
+    def dmaxchisq(x):
+        return 1.0 - np.exp(p * chi2.logcdf(x, df=1))
+
+    expectation, _ = quad(dmaxchisq, 0, np.inf)
+    return expectation
+
+
+def mse(residuals):
+    return 0.5 * np.mean(residuals**2)
+
+
+def calculate_psi_M(x, y, beta_estimate):
+    """The psi/score function for mse: 0.5*residual**2"""
+    residuals = y - beta_estimate * x
+    psi = -residuals * x
+    M = -np.mean(x**2)
+    return psi, M
+
+
+def calculate_influence(x, y, beta_estimate):
+    """The influence of (x, y) on beta_estimate as an mse M-estimator"""
+    psi, M = calculate_psi_M(x, y, beta_estimate)
+    return psi / M
+
+
+def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
+    """Boost coefficients of linearly regressing y on standardized X.
+
+    The coefficient selection utilizes information theoretic weighting.
+    The stopping criterion utilizes information theoretic loss-reduction.
+    """
+    n_samples, n_features = X.shape
+    coefficients = np.zeros(n_features)
+    residuals, residuals_loo = y.copy(), y.copy()
+    y_mse = mse(y)
+    previous_residual_mse = y_mse
+    mse_factor = expected_max_chisq(n_features)
+    comparison_factor_aic = 1 + mse_factor / n_samples
+    # The (fast) AIC comparison factor assumes the AIC on mse as n_features/n_samples
+    # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse(residuals). This converges to TIC. Under certain conditions this is AIC.
+    # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This needs to be adjusted for.
+    # The mse_factor adjusts for this.
+
+    for iteration in range(max_iter):
+        coef_changes = np.zeros(n_features)
+
+        # Calculate coefficient change for each feature
+        for feature in range(n_features):
+            coef_changes[feature] = (
+                np.dot(X[:, feature], residuals) / n_samples
+            )
+
+        # adjust based on information-criterion penalty
+        feature_evaluation = np.zeros(n_features)
+        for feature in range(n_features):
+            beta_estimate_j = coef_changes[feature]
+            residuals_j = residuals - beta_estimate_j * X[:, feature]
+            residual_mse_j = mse(
+                residuals_j
+            )  # np.cov(residuals_j, rowvar=False)
+            if coefficients[feature] == 0:
+                # add IC penalty: for mse, this is 1 x conditional variance (aic (fast) context), because feature is not added
+                # The added feature IC penalty is constant for both models, and therefore not added.
+                feature_evaluation[feature] = (
+                    residual_mse_j * comparison_factor_aic
+                )
+            else:
+                feature_evaluation[feature] = residual_mse_j
+
+        # Select feature based on loss criterion
+        best_feature = np.argmin(feature_evaluation)
+        beta_estimate = coef_changes[best_feature]
+        coef_change = beta_estimate * learning_rate
+
+        # adjust to loo estimates for coef_change
+        influence = calculate_influence(
+            X[:, best_feature], residuals, beta_estimate
+        )
+        beta_estimate_loo = beta_estimate - influence / n_samples
+        coef_change_loo = beta_estimate_loo * learning_rate
+
+        # Make sure boosting should start at all
+        if iteration == 0:
+            residuals_full = y - beta_estimate * X[:, best_feature]
+            residuals_full_loo = y - beta_estimate_loo * X[:, best_feature]
+            if y_mse < mse(residuals_full) + mse_factor * (
+                mse(residuals_full_loo) - mse(residuals_full)
+            ):
+                break
+
+        # Update residuals
+        residuals -= coef_change * X[:, best_feature]
+        residuals_loo -= coef_change_loo * X[:, best_feature]
+
+        # Do loo-cv-square-maximized adjusted mse residual estimate
+        new_residual_mse = mse(residuals) + mse_factor * (
+            mse(residuals_loo) - mse(residuals)
+        )
+
+        # Check for convergence
+        if np.abs(coef_change) < tol:
+            break
+        elif previous_residual_mse < new_residual_mse:
+            break
+        else:
+            # Update
+            previous_residual_mse = new_residual_mse
+            coefficients[best_feature] += coef_change
+
+    return coefficients
+
+
+def linear_boost_ic_regression(U, Y):
+    """
+    Performs boosted linear regression for each response in Y against predictors in U,
+    constructing a sparse matrix of regression coefficients. The complexity is tuned with an information theoretic approach.
+
+    The function scales features in U using standard scaling before learning the coefficients, then re-scales the coefficients to the original scale of U. This
+    extracts the effect of each feature in U on each response in Y, ignoring
+    intercepts and constant terms.
+
+    Parameters
+    ----------
+    U : np.ndarray
+        2D array of predictors with shape (n, p).
+    Y : np.ndarray
+        2D array of responses with shape (n, m).
+
+    Returns
+    -------
+    H_sparse : scipy.sparse.csc_matrix
+        Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
+        each response in Y.
+
+    Raises
+    ------
+    AssertionError
+        If the number of samples in U and Y do not match, or if the shape of
+        H_sparse is not (m, p).
+    """
+    n, p = U.shape  # p: number of features
+    n_y, m = Y.shape  # m: number of y responses
+
+    # Assert that the first dimension of U and Y are the same
+    assert n == n_y, "Number of samples in U and Y must be the same"
+
+    scaler_u = StandardScaler()
+    U_scaled = scaler_u.fit_transform(U)
+
+    scaler_y = StandardScaler()
+    Y_scaled = scaler_y.fit_transform(Y)
+
+    # Loop over features
+    i_H, j_H, values_H = [], [], []
+    for j in tqdm(
+        range(m), desc="Learning sparse linear map for each response"
+    ):
+        y_j = Y_scaled[:, j]
+
+        # Learn individual fit
+        coefficients_j = boost_linear_regression(U_scaled, y_j)
+
+        # Extract coefficients
+        for non_zero_ind in coefficients_j.nonzero()[0]:
+            i_H.append(j)
+            j_H.append(non_zero_ind)
+            values_H.append(
+                scaler_y.scale_[j]
+                * coefficients_j[non_zero_ind]
                 / scaler_u.scale_[non_zero_ind]
             )
 

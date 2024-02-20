@@ -5,7 +5,7 @@ from sksparse.cholmod import cholesky
 import networkx as nx
 
 from .precision_estimation import fit_precision_cholesky
-from .linear_regression import linear_l1_regression
+from .linear_regression import linear_l1_regression, linear_boost_ic_regression
 
 
 def perturb_d(d: np.ndarray, Prec_eps: spmatrix) -> np.ndarray:
@@ -94,11 +94,18 @@ class EnIF:
         """
         self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
-    def fit_H(self, U: np.ndarray, Y: np.ndarray):
+    def fit_H(self, U: np.ndarray, Y: np.ndarray, learning_algorithm="LASSO"):
         """
         Estimate H from data U using (sparse) linear regression
         """
-        self.H = linear_l1_regression(U, Y)
+        if learning_algorithm == "LASSO":
+            self.H = linear_l1_regression(U, Y)
+        elif learning_algorithm == "influence-boost":
+            self.H = linear_boost_ic_regression(U, Y)
+        else:
+            raise ValueError(
+                f"Argument `learning_algorithm` must be a valid type. Got: {learning_algorithm}"
+            )
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
         """
