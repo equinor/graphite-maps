@@ -62,6 +62,7 @@ class EnIF:
         self,
         U: np.ndarray,
         Y: Optional[np.ndarray] = None,
+        learning_algorithm: Optional[str] = "LASSO",
         verbose: bool = True,
     ) -> None:
         """
@@ -75,7 +76,7 @@ class EnIF:
             )
         if Y is not None:
             assert self.H is None, "Y should not be provided if H exists"
-            self.fit_H(U, Y)
+            self.fit_H(U=U, Y=Y, learning_algorithm=learning_algorithm)
         elif verbose:
             print("H mapping exists. Use `fit_H` to refit if necessary")
 
@@ -94,7 +95,11 @@ class EnIF:
         """
         self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
-    def fit_H(self, U: np.ndarray, Y: np.ndarray, learning_algorithm="LASSO"):
+    def fit_H(
+            self, U: np.ndarray, 
+            Y: np.ndarray, 
+            learning_algorithm: Optional[str] = "LASSO"
+        ) -> None:
         """
         Estimate H from data U using (sparse) linear regression
         """
