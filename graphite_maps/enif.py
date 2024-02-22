@@ -96,10 +96,11 @@ class EnIF:
         self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
 
     def fit_H(
-            self, U: np.ndarray, 
-            Y: np.ndarray, 
-            learning_algorithm: Optional[str] = "LASSO"
-        ) -> None:
+        self,
+        U: np.ndarray,
+        Y: np.ndarray,
+        learning_algorithm: Optional[str] = "LASSO",
+    ) -> None:
         """
         Estimate H from data U using (sparse) linear regression
         """
