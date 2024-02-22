@@ -104,7 +104,8 @@ class EnIF:
             self.H = linear_boost_ic_regression(U, Y)
         else:
             raise ValueError(
-                f"Argument `learning_algorithm` must be a valid type. Got: {learning_algorithm}"
+                f"Argument `learning_algorithm` must be a valid type. "
+                f"Got: {learning_algorithm}"
             )
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
