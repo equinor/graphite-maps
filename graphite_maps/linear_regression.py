@@ -148,8 +148,10 @@ def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
                 residuals_j
             )  # np.cov(residuals_j, rowvar=False)
             if coefficients[feature] == 0:
-                # add IC penalty: for mse, this is 1 x conditional variance (aic (fast) context), because feature is not added
-                # The added feature IC penalty is constant for both models, and therefore not added.
+                # add IC penalty: for mse, this is 1 x conditional variance
+                # (aic (fast) context), because feature is not added
+                # The added feature IC penalty is constant for both models,
+                # and therefore not added.
                 feature_evaluation[feature] = (
                     residual_mse_j * comparison_factor_aic
                 )
