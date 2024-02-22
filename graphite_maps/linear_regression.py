@@ -8,9 +8,8 @@ from tqdm import tqdm
 
 
 def linear_l1_regression(U, Y):
-    """
-    Performs LASSO regression for each response in Y against predictors in U,
-    constructing a sparse matrix of regression coefficients.
+    """Performs LASSO regression for each response in Y against predictors in
+    U, constructing a sparse matrix of regression coefficients.
 
     The function scales features in U using standard scaling before applying
     LASSO, then re-scales the coefficients to the original scale of U. This
@@ -83,7 +82,7 @@ def linear_l1_regression(U, Y):
 
 
 def expected_max_chisq(p):
-    """Expected maximum of p central chi-square(1) random variables"""
+    """Expected maximum of p central chi-square(1) random variables."""
 
     def dmaxchisq(x):
         return 1.0 - np.exp(p * chi2.logcdf(x, df=1))
@@ -97,7 +96,7 @@ def mse(residuals):
 
 
 def calculate_psi_M(x, y, beta_estimate):
-    """The psi/score function for mse: 0.5*residual**2"""
+    """The psi/score function for mse: 0.5*residual**2."""
     residuals = y - beta_estimate * x
     psi = -residuals * x
     M = -np.mean(x**2)
@@ -105,7 +104,7 @@ def calculate_psi_M(x, y, beta_estimate):
 
 
 def calculate_influence(x, y, beta_estimate):
-    """The influence of (x, y) on beta_estimate as an mse M-estimator"""
+    """The influence of (x, y) on beta_estimate as an mse M-estimator."""
     psi, M = calculate_psi_M(x, y, beta_estimate)
     return psi / M
 
@@ -113,8 +112,8 @@ def calculate_influence(x, y, beta_estimate):
 def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
     """Boost coefficients of linearly regressing y on standardized X.
 
-    The coefficient selection utilizes information theoretic weighting.
-    The stopping criterion utilizes information theoretic loss-reduction.
+    The coefficient selection utilizes information theoretic weighting. The
+    stopping criterion utilizes information theoretic loss-reduction.
     """
     n_samples, n_features = X.shape
     coefficients = np.zeros(n_features)
@@ -123,9 +122,12 @@ def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
     previous_residual_mse = y_mse
     mse_factor = expected_max_chisq(n_features)
     comparison_factor_aic = 1 + mse_factor / n_samples
-    # The (fast) AIC comparison factor assumes the AIC on mse as n_features/n_samples
-    # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse(residuals). This converges to TIC. Under certain conditions this is AIC.
-    # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This needs to be adjusted for.
+    # The (fast) AIC comparison factor assumes the AIC on mse as
+    # n_features/n_samples
+    # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse
+    # (residuals). This converges to TIC. Under certain conditions this is AIC.
+    # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This
+    #  needs to be adjusted for.
     # The mse_factor adjusts for this.
 
     for iteration in range(max_iter):
@@ -198,13 +200,14 @@ def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
 
 
 def linear_boost_ic_regression(U, Y):
-    """
-    Performs boosted linear regression for each response in Y against predictors in U,
-    constructing a sparse matrix of regression coefficients. The complexity is tuned with an information theoretic approach.
+    """Performs boosted linear regression for each response in Y against
+    predictors in U, constructing a sparse matrix of regression coefficients.
+    The complexity is tuned with an information theoretic approach.
 
-    The function scales features in U using standard scaling before learning the coefficients, then re-scales the coefficients to the original scale of U. This
-    extracts the effect of each feature in U on each response in Y, ignoring
-    intercepts and constant terms.
+    The function scales features in U using standard scaling before learning
+    the coefficients, then re-scales the coefficients to the original scale of
+    U. This extracts the effect of each feature in U on each response in Y,
+    ignoring intercepts and constant terms.
 
     Parameters
     ----------
