@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
+from scipy.sparse import spmatrix
 from scipy.stats import chi2
 from scipy.integrate import quad
 from sklearn.linear_model import LassoCV
@@ -269,3 +270,27 @@ def linear_boost_ic_regression(U, Y):
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
     return H_sparse
+
+
+def response_residual(U: np.ndarray, Y: np.ndarray, H: spmatrix) -> np.ndarray:
+    """Residual from regression H for Y on U"""
+    n_u, p = U.shape
+    n_y, m = Y.shape
+    assert n_u == n_y, "Number of ensembles must be the same"
+    assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
+
+    return Y - U @ H.T
+
+
+def residual_variance(U: np.ndarray, Y: np.ndarray, H: spmatrix) -> np.ndarray:
+    """Variance in Y not explained by U through H"""
+
+    n_u, p = U.shape
+    n_y, m = Y.shape
+    assert n_u == n_y, "Number of ensembles must be the same"
+    assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
+
+    R = response_residual(U, Y, H)
+    unexplained_variance = np.var(R, axis=0)
+
+    return unexplained_variance
