@@ -43,66 +43,6 @@ def generate_gaussian_noise(n: int, Prec_eps: spmatrix) -> np.ndarray:
     return eps
 
 
-def perturb_d(d: np.ndarray, y: np.ndarray, Prec_eps: spmatrix) -> np.ndarray:
-    """
-    Perturbs the array 'd' by adding Gaussian noise with precision 'Prec_eps'.
-
-    Parameters
-    ----------
-    d : np.ndarray
-        The original array to be perturbed.
-    Prec_eps : scipy.sparse.csc_matrix
-        The precision matrix for the Gaussian noise.
-
-    Returns
-    -------
-    np.ndarray
-        The perturbed array.
-    """
-    # Sample from a standard normal using sparse Cholesky
-    cholesky_factor = cholesky(Prec_eps)
-    standard_normal_samples = np.random.normal(size=d.shape)
-
-    # Transform the samples using the inverse Cholesky factor
-    # This transformation results in samples from N(0, Prec_eps^-1)
-    eps = cholesky_factor.solve_A(standard_normal_samples)
-
-    # Add the noise to 'd'
-    d_perturbed = d - eps
-
-    return d_perturbed
-
-
-def rnoise(d: np.ndarray, y: np.ndarray, Prec_eps: spmatrix) -> np.ndarray:
-    """
-    Generate random the array 'd' by adding Gaussian noise with precision 'Prec_eps'.
-
-    Parameters
-    ----------
-    d : np.ndarray
-        The original array to be perturbed.
-    Prec_eps : scipy.sparse.csc_matrix
-        The precision matrix for the Gaussian noise.
-
-    Returns
-    -------
-    np.ndarray
-        The perturbed array.
-    """
-    # Sample from a standard normal using sparse Cholesky
-    cholesky_factor = cholesky(Prec_eps)
-    standard_normal_samples = np.random.normal(size=d.shape)
-
-    # Transform the samples using the inverse Cholesky factor
-    # This transformation results in samples from N(0, Prec_eps^-1)
-    eps = cholesky_factor.solve_A(standard_normal_samples)
-
-    # Add the noise to 'd'
-    d_perturbed = d - eps
-
-    return d_perturbed
-
-
 class EnIF:
     def __init__(
         self,
