@@ -5,38 +5,32 @@ from sksparse.cholmod import cholesky
 import networkx as nx
 
 from .precision_estimation import fit_precision_cholesky
-from .linear_regression import (
-    linear_l1_regression,
-    linear_boost_ic_regression,
-    response_residual,
-    residual_variance,
-)
+from . import linear_regression as lr
 
 
-def generate_gaussian_noise(n: int, Prec_eps: spmatrix) -> np.ndarray:
+def generate_gaussian_noise(n: int, Prec: spmatrix) -> np.ndarray:
     """
-    Generates 'n' samples of Gaussian noise with precision 'Prec_eps'.
+    Generates 'n' samples of Gaussian noise with precision 'Prec'.
 
     Parameters
     ----------
     n : int
         The number of samples to generate.
-    Prec_eps : scipy.sparse.spmatrix
+    Prec : scipy.sparse.spmatrix
         The precision matrix for the Gaussian noise, assumed to be sparse.
 
     Returns
     -------
     np.ndarray
-        The Gaussian noise array of shape (n, m), where Prec_eps has shape
-        (m, m).
+        The Gaussian noise array of shape (n, m), where Prec has shape (m, m).
     """
 
-    m = Prec_eps.shape[0]
+    m = Prec.shape[0]
     standard_normal_samples = np.random.normal(size=(n, m))
-    cholesky_factor = cholesky(Prec_eps)
+    cholesky_factor = cholesky(Prec)
 
     # Transform the samples using the inverse Cholesky factor
-    # This transformation results in samples from N(0, Prec_eps^-1)
+    # This transformation results in samples from N(0, Prec^-1)
     eps = cholesky_factor.solve_A(standard_normal_samples.T).T
 
     assert eps.shape == (n, m), "Sampling returns wrong size"
@@ -100,11 +94,10 @@ class EnIF:
         canonical = self.pushforward_to_canonical(U)
 
         # Work out residuals and associate unexplained variance
-        residual = response_residual(U, Y, self.H)
-        eps = generate_gaussian_noise(n, self.Prec_eps)
+        residual = self.response_residual(U, Y)
+        self.residual_variance(U, Y)
+        eps = self.generate_observation_noise(n)
         residual_noisy = residual + eps
-        if self.unexplained_variance is None:
-            self.unexplained_variance = residual_variance(U, Y, self.H)
 
         # Update in canonical parametrization
         canonical_updated = self.update_canonical(canonical, residual_noisy, d)
@@ -129,15 +122,15 @@ class EnIF:
         Estimate H from data U using (sparse) linear regression
         """
         if learning_algorithm == "LASSO":
-            self.H = linear_l1_regression(U, Y)
+            self.H = lr.linear_l1_regression(U, Y)
         elif learning_algorithm == "influence-boost":
-            self.H = linear_boost_ic_regression(U, Y)
+            self.H = lr.linear_boost_ic_regression(U, Y)
         else:
             raise ValueError(
                 f"Argument `learning_algorithm` must be a valid type. "
                 f"Got: {learning_algorithm}"
             )
-        self.unexplained_variance = residual_variance(U, Y, self.H)
+        self.residual_variance(U, Y)
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
         """
@@ -162,6 +155,27 @@ class EnIF:
             Prec_r.shape == self.Prec_eps.shape
         ), "Residuals and noise precision should have same shape"
         return Prec_r
+
+    def response_residual(self, U: np.ndarray, Y: np.ndarray) -> np.ndarray:
+        """Residual from regression self.H for Y on U"""
+        if self.H is None:
+            raise ValueError("H is not set.")
+
+        return lr.response_residual(U, Y, self.H)
+
+    def residual_variance(self, U: np.ndarray, Y: np.ndarray) -> None:
+        """Sets self.unexplained_variance from variance on residuals"""
+        if self.H is None:
+            raise ValueError("H is not set.")
+
+        self.unexplained_variance = lr.residual_variance(U, Y, self.H)
+
+    def generate_observation_noise(self, n: int) -> np.ndarray:
+        """Sample n realizations of observation noise."""
+        if n < 1:
+            raise ValueError(f"`n` should be g.e. 1, got {n}")
+
+        return generate_gaussian_noise(n, self.Prec_eps)
 
     def update_canonical(
         self, canonical: np.ndarray, residual_noisy: np.ndarray, d: np.ndarray
