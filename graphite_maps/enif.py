@@ -1,43 +1,41 @@
 from typing import Optional
 import numpy as np
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, diags
 from sksparse.cholmod import cholesky
 import networkx as nx
 
 from .precision_estimation import fit_precision_cholesky
-from .linear_regression import linear_l1_regression, linear_boost_ic_regression
+from . import linear_regression as lr
 
 
-def perturb_d(d: np.ndarray, Prec_eps: spmatrix) -> np.ndarray:
+def generate_gaussian_noise(n: int, Prec: spmatrix) -> np.ndarray:
     """
-    Perturbs the array 'd' by adding Gaussian noise with precision 'Prec_eps'.
+    Generates 'n' samples of Gaussian noise with precision 'Prec'.
 
     Parameters
     ----------
-    d : np.ndarray
-        The original array to be perturbed.
-    Prec_eps : scipy.sparse.csc_matrix
-        The precision matrix for the Gaussian noise.
+    n : int
+        The number of samples to generate.
+    Prec : scipy.sparse.spmatrix
+        The precision matrix for the Gaussian noise, assumed to be sparse.
 
     Returns
     -------
     np.ndarray
-        The perturbed array.
+        The Gaussian noise array of shape (n, m), where Prec has shape (m, m).
     """
-    # Perform sparse Cholesky decomposition of the precision matrix
-    cholesky_factor = cholesky(Prec_eps)
 
-    # Sample from a standard normal distribution
-    standard_normal_samples = np.random.normal(size=d.shape)
+    m = Prec.shape[0]
+    standard_normal_samples = np.random.normal(size=(n, m))
+    cholesky_factor = cholesky(Prec)
 
     # Transform the samples using the inverse Cholesky factor
-    # This transformation results in samples from N(0, Prec_eps^-1)
-    eps = cholesky_factor.solve_A(standard_normal_samples)
+    # This transformation results in samples from N(0, Prec^-1)
+    eps = cholesky_factor.solve_A(standard_normal_samples.T).T
 
-    # Add the noise to 'd'
-    d_perturbed = d + eps
+    assert eps.shape == (n, m), "Sampling returns wrong size"
 
-    return d_perturbed
+    return eps
 
 
 class EnIF:
@@ -57,6 +55,7 @@ class EnIF:
         self.Graph_u = Graph_u
         self.Prec_eps = Prec_eps
         self.H = H
+        self.unexplained_variance: Optional[np.ndarray] = None
 
     def fit(
         self,
@@ -80,13 +79,30 @@ class EnIF:
         elif verbose:
             print("H mapping exists. Use `fit_H` to refit if necessary")
 
-    def transport(self, U: np.ndarray, d: np.ndarray) -> np.ndarray:
+    def transport(
+        self, U: np.ndarray, Y: np.ndarray, d: np.ndarray
+    ) -> np.ndarray:
         """
         Transport U from a sample from the prior to the posterior
         """
+        n, _ = U.shape
+        n_y, m = Y.shape
+        assert n == n_y, "Number of ensembles must be the same"
+        assert d.shape == (m,), "Observations must match responses"
+
+        # Map parameters to canonical parametrization
         canonical = self.pushforward_to_canonical(U)
-        updated = self.update_canonical(canonical, d)
-        return self.pullback_from_canonical(updated)
+
+        # Work out residuals and associate unexplained variance
+        residual = self.response_residual(U, Y)
+        eps = self.generate_observation_noise(n)
+        residual_noisy = residual + eps
+
+        # Update in canonical parametrization
+        canonical_updated = self.update_canonical(canonical, residual_noisy, d)
+
+        # Bring realizations back
+        return self.pullback_from_canonical(canonical_updated)
 
     # Low-level API methods
     def fit_precision(self, U: np.ndarray) -> None:
@@ -105,40 +121,86 @@ class EnIF:
         Estimate H from data U using (sparse) linear regression
         """
         if learning_algorithm == "LASSO":
-            self.H = linear_l1_regression(U, Y)
+            self.H = lr.linear_l1_regression(U, Y)
         elif learning_algorithm == "influence-boost":
-            self.H = linear_boost_ic_regression(U, Y)
+            self.H = lr.linear_boost_ic_regression(U, Y)
         else:
             raise ValueError(
                 f"Argument `learning_algorithm` must be a valid type. "
                 f"Got: {learning_algorithm}"
             )
+        self.residual_variance(U, Y)
 
     def pushforward_to_canonical(self, U: np.ndarray) -> np.ndarray:
         """
-        Map each realization u in U to canonical space nu = Prec * u
+        Map each realization u in U to canonical space eta = Prec * u
         """
         assert self.Prec_u is not None, "Precision must exist to pushforward"
-        Nu = (self.Prec_u @ U.T).T
-        assert Nu.shape == U.shape, "Nu preserves the shape of U"
-        return Nu
+        Eta = (self.Prec_u @ U.T).T
+        assert Eta.shape == U.shape, "Eta preserves the shape of U"
+        return Eta
+
+    @property
+    def Prec_residual_noisy(self) -> spmatrix:
+
+        if self.Prec_eps is None:
+            raise ValueError("Prec_eps is not set.")
+
+        eps_prec_diag = self.Prec_eps.diagonal()
+        eps_variances = 1.0 / eps_prec_diag
+        residual_noisy_variances = self.unexplained_variance + eps_variances
+        Prec_r = diags(1.0 / residual_noisy_variances, 0)
+        assert (
+            Prec_r.shape == self.Prec_eps.shape
+        ), "Residuals and noise precision should have same shape"
+        return Prec_r
+
+    def response_residual(self, U: np.ndarray, Y: np.ndarray) -> np.ndarray:
+        """Residual from regression self.H for Y on U"""
+        if self.H is None:
+            raise ValueError("H is not set.")
+
+        self.residual_variance(U, Y)
+
+        return lr.response_residual(U, Y, self.H)
+
+    def residual_variance(self, U: np.ndarray, Y: np.ndarray) -> None:
+        """Sets self.unexplained_variance from variance on residuals"""
+        if self.H is None:
+            raise ValueError("H is not set.")
+
+        self.unexplained_variance = lr.residual_variance(U, Y, self.H)
+
+    def generate_observation_noise(self, n: int) -> np.ndarray:
+        """Sample n realizations of observation noise."""
+        if n < 1:
+            raise ValueError(f"`n` should be g.e. 1, got {n}")
+
+        return generate_gaussian_noise(n, self.Prec_eps)
 
     def update_canonical(
-        self, canonical: np.ndarray, d: np.ndarray
+        self, canonical: np.ndarray, residual_noisy: np.ndarray, d: np.ndarray
     ) -> np.ndarray:
         """
-        Use information-filter equations to update (nu, Prec) using perturbed d
+        Use information-filter equations to update (eta, Prec) using perturbed
+        d
         """
         assert self.H is not None, "H must be provided of fitted"
         assert self.Prec_u is not None, "Precision must be provided of fitted"
 
-        # posterior nu
         n, p = canonical.shape
+        n_r, m = residual_noisy.shape
+        assert n == n_r, "canonical and residual_noisy must have equal samples"
+        assert d.shape == (
+            m,
+        ), "d and residual_noisy must have matching dimension"
+
         updated_canonical = np.empty((n, p))
+        Prec_r = self.Prec_residual_noisy
         for i in range(n):
-            d_perturbed = perturb_d(d, self.Prec_eps)
-            updated_canonical[i:,] = (
-                canonical[i:,] + self.H.T @ self.Prec_eps @ d_perturbed
+            d_adjusted = d - residual_noisy[i, :]
+            updated_canonical[i, :] = (
+                canonical[i, :] + self.H.T @ Prec_r @ d_adjusted
             )
 
         # posterior precision
@@ -150,11 +212,11 @@ class EnIF:
         self, updated_canonical: np.ndarray
     ) -> np.ndarray:
         """
-        Solve u = Prec * nu
+        Solve u = Prec * eta
         """
         # Compute sparse Cholesky factorization
         factor = cholesky(self.Prec_u)
-        # Use the Cholesky factor to solve u = Prec * nu
+        # Use the Cholesky factor to solve u = Prec * eta
         updated_moment = factor.solve_A(updated_canonical.T).T
 
         return updated_moment
