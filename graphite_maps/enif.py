@@ -27,7 +27,8 @@ def generate_gaussian_noise(n: int, Prec_eps: spmatrix) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        The Gaussian noise array of shape (n, m), where Prec_eps has shape (m, m).
+        The Gaussian noise array of shape (n, m), where Prec_eps has shape
+        (m, m).
     """
 
     m = Prec_eps.shape[0]
@@ -166,7 +167,8 @@ class EnIF:
         self, canonical: np.ndarray, residual_noisy: np.ndarray, d: np.ndarray
     ) -> np.ndarray:
         """
-        Use information-filter equations to update (eta, Prec) using perturbed d
+        Use information-filter equations to update (eta, Prec) using perturbed
+        d
         """
         assert self.H is not None, "H must be provided of fitted"
         assert self.Prec_u is not None, "Precision must be provided of fitted"
