@@ -60,7 +60,7 @@ class EnIF:
         self.Graph_u = Graph_u
         self.Prec_eps = Prec_eps
         self.H = H
-        self.unexplained_variance = None
+        self.unexplained_variance: Optional[np.ndarray] = None
 
     def fit(
         self,
