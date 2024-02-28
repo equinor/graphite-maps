@@ -95,7 +95,6 @@ class EnIF:
 
         # Work out residuals and associate unexplained variance
         residual = self.response_residual(U, Y)
-        self.residual_variance(U, Y)
         eps = self.generate_observation_noise(n)
         residual_noisy = residual + eps
 
@@ -160,6 +159,8 @@ class EnIF:
         """Residual from regression self.H for Y on U"""
         if self.H is None:
             raise ValueError("H is not set.")
+
+        self.residual_variance(U, Y)
 
         return lr.response_residual(U, Y, self.H)
 
