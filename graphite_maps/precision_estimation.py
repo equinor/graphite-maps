@@ -169,10 +169,12 @@ def find_sparsity_structure(
     return G_C, perm_compose, P_rev, P_amd
 
 
-def objective_function(C_k: np.ndarray, U: np.ndarray) -> float:
+def objective_function(
+    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
+) -> float:
     """
     Objective function for optimizing the affine KR map with standard Gaussian
-    reference.
+    reference and l2 regularized dependence.
 
     Parameters
     ----------
@@ -181,6 +183,8 @@ def objective_function(C_k: np.ndarray, U: np.ndarray) -> float:
         associate precision matrix CTC = Prec.
     U : np.ndarray
         The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -189,10 +193,13 @@ def objective_function(C_k: np.ndarray, U: np.ndarray) -> float:
     """
     Su = U.dot(C_k)
     n, _ = U.shape
-    return 0.5 * np.sum(Su**2) - n * np.log(abs(C_k[-1]))
+    regularization_l2 = 0.5 * lambda_l2 * np.sum(C_k[:-1] ** 2)
+    return 0.5 * np.sum(Su**2) - n * np.log(abs(C_k[-1])) + regularization_l2
 
 
-def gradient(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
+def gradient(
+    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
+) -> np.ndarray:
     """
     Gradient of the objective function.
 
@@ -203,6 +210,8 @@ def gradient(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
         associate precision matrix CTC = Prec.
     U : np.ndarray
         The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -212,11 +221,14 @@ def gradient(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
     n, _ = U.shape
     prediction = U.dot(C_k)
     grad = U.T.dot(prediction)
+    grad[:-1] += lambda_l2 * C_k[:-1]  # Adjust for L2 regularization
     grad[-1] -= n / C_k[-1]  # Adjust for the -log|C_k,k| term
     return grad
 
 
-def hessian(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
+def hessian(
+    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
+) -> np.ndarray:
     """
     Hessian `objective_function`.
 
@@ -227,6 +239,8 @@ def hessian(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
         associate precision matrix CTC = Prec.
     U : np.ndarray
         The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -235,13 +249,17 @@ def hessian(C_k: np.ndarray, U: np.ndarray) -> np.ndarray:
     """
     n, _ = U.shape
     H = U.T.dot(U)
+    np.fill_diagonal(H[:-1, :-1], H.diagonal()[:-1] + lambda_l2)  # L2-term
     H[-1, -1] += n / (C_k[-1] ** 2)  # Adjust for the -log|C_k,k| term
     return H
 
 
-def optimize_sparse_affine_kr_map(U: np.ndarray, G: nx.Graph) -> csc_matrix:
+def optimize_sparse_affine_kr_map(
+    U: np.ndarray, G: nx.Graph, lambda_l2: float = 1.0
+) -> csc_matrix:
     """
-    Optimizing the affine KR map with standard Gaussian reference.
+    Optimizing the affine KR map with standard Gaussian reference  and l2
+    regularized dependence.
 
     Parameters
     ----------
@@ -249,6 +267,8 @@ def optimize_sparse_affine_kr_map(U: np.ndarray, G: nx.Graph) -> csc_matrix:
         The data matrix.
     G : networkx.Graph
         The graph representing the non-zero structure in C.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -278,7 +298,7 @@ def optimize_sparse_affine_kr_map(U: np.ndarray, G: nx.Graph) -> csc_matrix:
         res = minimize(
             fun=objective_function,
             x0=C_k_reduced,
-            args=(U_reduced),
+            args=(U_reduced, lambda_l2),
             method="trust-constr",
             jac=gradient,
             hess=hessian,
@@ -291,15 +311,20 @@ def optimize_sparse_affine_kr_map(U: np.ndarray, G: nx.Graph) -> csc_matrix:
     return C_full.tocsc()
 
 
-def fit_precision_cholesky(U: np.ndarray, Graph_u: nx.Graph) -> np.ndarray:
+def fit_precision_cholesky(
+    U: np.ndarray, Graph_u: nx.Graph, lambda_l2: float = 1.0
+) -> np.ndarray:
     """
     Estimate the precision matrix using Cholesky decomposition.
+    An l2-regularized negative log-likelihood is minimized.
 
     Parameters
     ----------
     U : The data matrix.
     Graph_u : The graph representing the non-zero structure in the precision
     matrix.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -314,7 +339,7 @@ def fit_precision_cholesky(U: np.ndarray, Graph_u: nx.Graph) -> np.ndarray:
 
     # 2. Estimate non-zeroes of C
     U_perm = U[:, perm_compose]
-    C = optimize_sparse_affine_kr_map(U_perm, Graph_C)
+    C = optimize_sparse_affine_kr_map(U_perm, Graph_C, lambda_l2=lambda_l2)
 
     # 3. Unwrap C to yield precision
     return P_amd @ P_rev @ (C.T @ C) @ P_rev @ P_amd.T
