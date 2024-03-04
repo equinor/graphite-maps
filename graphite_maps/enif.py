@@ -63,12 +63,13 @@ class EnIF:
         Y: Optional[np.ndarray] = None,
         learning_algorithm: Optional[str] = "LASSO",
         verbose: bool = True,
+        lambda_l2_precision: float = 1.0,
     ) -> None:
         """
         Fit precision of u and (sparse) mapping H:u->y.
         """
         if self.Prec_u is None:
-            self.fit_precision(U)
+            self.fit_precision(U, lambda_l2_precision)
         elif verbose:
             print(
                 "Precision u exists. Use `fit_precision` to refit if necessary"
@@ -105,11 +106,13 @@ class EnIF:
         return self.pullback_from_canonical(canonical_updated)
 
     # Low-level API methods
-    def fit_precision(self, U: np.ndarray) -> None:
+    def fit_precision(self, U: np.ndarray, lambda_l2: float = 1.0) -> None:
         """
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
         """
-        self.Prec_u = fit_precision_cholesky(U, self.Graph_u)
+        self.Prec_u = fit_precision_cholesky(
+            U, self.Graph_u, lambda_l2=lambda_l2
+        )
 
     def fit_H(
         self,
