@@ -5,7 +5,7 @@ import scipy.sparse as sp
 from scipy.optimize import minimize
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
-from scipy.sparse import lil_matrix, csc_matrix
+from scipy.sparse import lil_matrix, csc_matrix, tril
 
 from typing import Tuple, Any
 from numpy.typing import NDArray
@@ -97,6 +97,7 @@ def gershgorin_spd_adjustment(prec):
 
 def find_sparsity_structure(
     Graph_u: nx.Graph,
+    verbose_level: int = 0,
 ) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
     Finds sparsity structure for lower triangular C so that CTC = LLT = PTAP.
@@ -164,6 +165,12 @@ def find_sparsity_structure(
     for i, j in zip(rows, cols):
         if i > j:  # Ensure lower triangular structure
             G_C.add_edge(i, j)
+
+    if verbose_level > 0:
+        print(
+            f"Parameters in precision: {tril(SPD_Prec).nnz}\n"
+            f"Parameters in Cholesky factor: {L.nnz}"
+        )
 
     # Return the results
     return G_C, perm_compose, P_rev, P_amd
@@ -255,7 +262,7 @@ def hessian(
 
 
 def optimize_sparse_affine_kr_map(
-    U: np.ndarray, G: nx.Graph, lambda_l2: float = 1.0
+    U: np.ndarray, G: nx.Graph, lambda_l2: float = 1.0, verbose_level: int = 0
 ) -> csc_matrix:
     """
     Optimizing the affine KR map with standard Gaussian reference  and l2
@@ -275,6 +282,9 @@ def optimize_sparse_affine_kr_map(
     scipy.sparse.csc_matrix
         The optimized sparse Cholesky factor of the precision matrix.
     """
+
+    if verbose_level > 0:
+        print("Starting statistical fitting of precision")
 
     _, p = U.shape
 
@@ -312,7 +322,10 @@ def optimize_sparse_affine_kr_map(
 
 
 def fit_precision_cholesky(
-    U: np.ndarray, Graph_u: nx.Graph, lambda_l2: float = 1.0
+    U: np.ndarray,
+    Graph_u: nx.Graph,
+    lambda_l2: float = 1.0,
+    verbose_level: int = 0,
 ) -> np.ndarray:
     """
     Estimate the precision matrix using Cholesky decomposition.
@@ -335,11 +348,21 @@ def fit_precision_cholesky(
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
     # 1. Find permutation yielding AMD ordering for C
-    Graph_C, perm_compose, P_rev, P_amd = find_sparsity_structure(Graph_u)
+    Graph_C, perm_compose, P_rev, P_amd = find_sparsity_structure(
+        Graph_u, verbose_level=verbose_level - 1
+    )
 
     # 2. Estimate non-zeroes of C
     U_perm = U[:, perm_compose]
-    C = optimize_sparse_affine_kr_map(U_perm, Graph_C, lambda_l2=lambda_l2)
+    C = optimize_sparse_affine_kr_map(
+        U_perm, Graph_C, lambda_l2=lambda_l2, verbose_level=verbose_level - 1
+    )
+
+    # 2.b Compute log-determinant of estimate, for logging
+    if verbose_level > 0:
+        L_r = P_rev @ C.T @ P_rev  # Factor of reverse precision
+        prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
+        print(f"Precision has log-determinant: {prec_logdet}")
 
     # 3. Unwrap C to yield precision
     return P_amd @ P_rev @ (C.T @ C) @ P_rev @ P_amd.T

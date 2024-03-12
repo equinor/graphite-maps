@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 
-def linear_l1_regression(U, Y):
+def linear_l1_regression(U, Y, verbose_level: int = 0):
     """Performs LASSO regression for each response in Y against predictors in
     U, constructing a sparse matrix of regression coefficients.
 
@@ -41,6 +41,9 @@ def linear_l1_regression(U, Y):
 
     # Assert that the first dimension of U and Y are the same
     assert n == n_y, "Number of samples in U and Y must be the same"
+
+    if verbose_level > 0:
+        print(f"Learning sparse linear map of shape {(m,p)}")
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -78,6 +81,13 @@ def linear_l1_regression(U, Y):
 
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
+
+    if verbose_level > 0:
+        print(
+            f"Total elements: {m*p}\n"
+            f"Non-zero elements: {H_sparse.nnz}\n"
+            f"Fraction of non-zeros: {H_sparse.nnz / (m*p)}"
+        )
 
     return H_sparse
 
@@ -202,7 +212,7 @@ def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
     return coefficients
 
 
-def linear_boost_ic_regression(U, Y):
+def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
     The complexity is tuned with an information theoretic approach.
@@ -237,6 +247,9 @@ def linear_boost_ic_regression(U, Y):
     # Assert that the first dimension of U and Y are the same
     assert n == n_y, "Number of samples in U and Y must be the same"
 
+    if verbose_level > 0:
+        print(f"Learning sparse linear map of shape {(m,p)}")
+
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
 
@@ -269,20 +282,34 @@ def linear_boost_ic_regression(U, Y):
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
+    if verbose_level > 0:
+        print(
+            f"Total elements: {m*p}\n"
+            f"Non-zero elements: {H_sparse.nnz}\n"
+            f"Fraction of non-zeros: {H_sparse.nnz / (m*p)}"
+        )
+
     return H_sparse
 
 
-def response_residual(U: np.ndarray, Y: np.ndarray, H: spmatrix) -> np.ndarray:
+def response_residual(
+    U: np.ndarray, Y: np.ndarray, H: spmatrix, verbose_level: int = 0
+) -> np.ndarray:
     """Residual from regression H for Y on U"""
     n_u, p = U.shape
     n_y, m = Y.shape
     assert n_u == n_y, "Number of ensembles must be the same"
     assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
 
+    if verbose_level > 0:
+        print("Calculating response residuals")
+
     return Y - U @ H.T
 
 
-def residual_variance(U: np.ndarray, Y: np.ndarray, H: spmatrix) -> np.ndarray:
+def residual_variance(
+    U: np.ndarray, Y: np.ndarray, H: spmatrix, verbose_level: int = 0
+) -> np.ndarray:
     """Variance in Y not explained by U through H"""
 
     n_u, p = U.shape
@@ -292,5 +319,8 @@ def residual_variance(U: np.ndarray, Y: np.ndarray, H: spmatrix) -> np.ndarray:
 
     R = response_residual(U, Y, H)
     unexplained_variance = np.var(R, axis=0)
+
+    if verbose_level > 0:
+        print("Calculating unexplained variance")
 
     return unexplained_variance
