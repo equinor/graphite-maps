@@ -76,8 +76,9 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
                 / scaler_u.scale_[non_zero_ind]
             )
 
-    values_H, i_H, j_H = np.array(values_H), np.array(i_H), np.array(j_H)
-    H_sparse = sp.csc_matrix((values_H, (i_H, j_H)), shape=(m, p))
+    H_sparse = sp.csc_matrix(
+        (np.array(values_H), (np.array(i_H), np.array(j_H))), shape=(m, p)
+    )
 
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
@@ -276,8 +277,9 @@ def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
                 / scaler_u.scale_[non_zero_ind]
             )
 
-    values_H, i_H, j_H = np.array(values_H), np.array(i_H), np.array(j_H)
-    H_sparse = sp.csc_matrix((values_H, (i_H, j_H)), shape=(m, p))
+    H_sparse = sp.csc_matrix(
+        (np.array(values_H), (np.array(i_H), np.array(j_H))), shape=(m, p)
+    )
 
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
