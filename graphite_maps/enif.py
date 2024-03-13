@@ -195,14 +195,14 @@ class EnIF:
 
         eps_prec_diag = self.Prec_eps.diagonal()
         eps_variances = 1.0 / eps_prec_diag
-        residual_noisy_variances = self.unexplained_variance + eps_variances
-        Prec_r = diags(1.0 / residual_noisy_variances, 0)
+        residual_noisy_var = self.unexplained_variance + eps_variances
+        Prec_r = diags(1.0 / residual_noisy_var, 0)
         assert (
             Prec_r.shape == self.Prec_eps.shape
         ), "Residuals and noise precision should have same shape"
         if verbose_level > 0:
             print(
-                f"Total residual variance: {np.sum(residual_noisy_variances)}\n"
+                f"Total residual variance: {np.sum(residual_noisy_var)}\n"
                 f"Unexplained variance: {np.sum(self.unexplained_variance)}\n"
                 f"Measurement variance: {np.sum(eps_variances)}"
             )
