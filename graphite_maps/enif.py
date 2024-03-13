@@ -190,6 +190,8 @@ class EnIF:
 
         if self.Prec_eps is None:
             raise ValueError("Prec_eps is not set.")
+        elif self.unexplained_variance is None:
+            raise ValueError("`unexplained_variance` is not set.")
 
         eps_prec_diag = self.Prec_eps.diagonal()
         eps_variances = 1.0 / eps_prec_diag
