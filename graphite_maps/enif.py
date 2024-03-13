@@ -185,7 +185,6 @@ class EnIF:
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
-    @property
     def Prec_residual_noisy(self, verbose_level: int = 0) -> spmatrix:
 
         if self.Prec_eps is None:
@@ -270,7 +269,7 @@ class EnIF:
             print(f"Prior precision log-determinant: {prior_logdet}")
 
         updated_canonical = np.empty((n, p))
-        Prec_r = self.Prec_residual_noisy
+        Prec_r = self.Prec_residual_noisy(verbose_level=verbose_level - 1)
         for i in range(n):
             d_adjusted = d - residual_noisy[i, :]
             updated_canonical[i, :] = (
