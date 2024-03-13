@@ -9,7 +9,7 @@ from . import linear_regression as lr
 
 
 def generate_gaussian_noise(
-    n: int, Prec: spmatrix, verbose_level: int = 0
+    n: int, Prec: spmatrix, seed: Optional[int] = None, verbose_level: int = 0
 ) -> np.ndarray:
     """
     Generates 'n' samples of Gaussian noise with precision 'Prec'.
@@ -28,7 +28,8 @@ def generate_gaussian_noise(
     """
 
     m = Prec.shape[0]
-    standard_normal_samples = np.random.normal(size=(n, m))
+    rng = np.random.default_rng(seed)
+    standard_normal_samples = rng.normal(size=(n, m))
     cholesky_factor = cholesky(Prec)
 
     # Transform the samples using the inverse Cholesky factor
@@ -38,7 +39,10 @@ def generate_gaussian_noise(
     assert eps.shape == (n, m), "Sampling returns wrong size"
 
     if verbose_level > 0:
-        print(f"Sampled Gaussian noise with shape {eps.shape}")
+        print(
+            f"Sampling with seed={seed}\n"
+            f"Sampled Gaussian noise with shape {eps.shape}"
+        )
 
     return eps
 
@@ -98,6 +102,7 @@ class EnIF:
         U: np.ndarray,
         Y: np.ndarray,
         d: np.ndarray,
+        seed: Optional[int] = None,
         verbose_level: int = 0,
     ) -> np.ndarray:
         """
@@ -118,7 +123,7 @@ class EnIF:
             U, Y, verbose_level=verbose_level - 1
         )
         eps = self.generate_observation_noise(
-            n, verbose_level=verbose_level - 1
+            n, seed=seed, verbose_level=verbose_level - 1
         )
         residual_noisy = residual + eps
 
@@ -232,14 +237,14 @@ class EnIF:
         )
 
     def generate_observation_noise(
-        self, n: int, verbose_level: int = 0
+        self, n: int, seed: Optional[int] = None, verbose_level: int = 0
     ) -> np.ndarray:
         """Sample n realizations of observation noise."""
         if n < 1:
             raise ValueError(f"`n` should be g.e. 1, got {n}")
 
         return generate_gaussian_noise(
-            n, self.Prec_eps, verbose_level=verbose_level - 1
+            n, self.Prec_eps, seed=seed, verbose_level=verbose_level - 1
         )
 
     def update_canonical(
