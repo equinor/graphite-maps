@@ -97,6 +97,7 @@ def gershgorin_spd_adjustment(prec):
 
 def find_sparsity_structure(
     Graph_u: nx.Graph,
+    ordering_method: str = "best",
     verbose_level: int = 0,
 ) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
@@ -118,8 +119,8 @@ def find_sparsity_structure(
         The composed permutation array.
     P_rev : scipy.sparse.csc_matrix
         The reverse permutation matrix.
-    P_amd : scipy.sparse.csc_matrix
-        The AMD permutation matrix.
+    P_order : scipy.sparse.csc_matrix
+        The in-fill reducing ordering permutation matrix.
     """
 
     # Matrices are pxp
@@ -137,22 +138,22 @@ def find_sparsity_structure(
     )
 
     # PT prec P = LLT
-    chol_LLT = cholesky(SPD_Prec, ordering_method="amd")
+    chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
 
-    # Get the AMD permutation vector
-    perm_amd = chol_LLT.P()
+    # Get the in-fill reducing permutation vector
+    perm_order = chol_LLT.P()
 
     # Create the permutation matrix P
-    P_amd = sp.csc_matrix(
-        (np.ones(len(perm_amd)), (perm_amd, np.arange(len(perm_amd)))),
+    P_order = sp.csc_matrix(
+        (np.ones(len(perm_order)), (perm_order, np.arange(len(perm_order)))),
         shape=SPD_Prec.shape,
     )
 
     # Extract the lower triangular Cholesky factor
     L = chol_LLT.L()
 
-    # Apply the AMD permutation to the reverse permutation
-    perm_compose = perm_amd[perm_reverse]
+    # Apply in-fill reducing ordering permutation to reverse permutation
+    perm_compose = perm_order[perm_reverse]
 
     # Create matrix of non-zeroes equalling C: LLT=CTC unique when SPD
     C_pattern = (P_rev @ L @ P_rev).T
@@ -173,7 +174,7 @@ def find_sparsity_structure(
         )
 
     # Return the results
-    return G_C, perm_compose, P_rev, P_amd
+    return G_C, perm_compose, P_rev, P_order
 
 
 def objective_function(
@@ -262,7 +263,11 @@ def hessian(
 
 
 def optimize_sparse_affine_kr_map(
-    U: np.ndarray, G: nx.Graph, lambda_l2: float = 1.0, verbose_level: int = 0
+    U: np.ndarray,
+    G: nx.Graph,
+    lambda_l2: float = 1.0,
+    optimization_method: str = "L-BFGS-B",
+    verbose_level: int = 0,
 ) -> csc_matrix:
     """
     Optimizing the affine KR map with standard Gaussian reference  and l2
@@ -305,13 +310,15 @@ def optimize_sparse_affine_kr_map(
         U_reduced = U[:, non_zero_indices]
 
         # Optimization for reduced C_k
+        lambda_l2_aic = len(non_zero_indices)
         res = minimize(
             fun=objective_function,
             x0=C_k_reduced,
-            args=(U_reduced, lambda_l2),
-            method="trust-constr",
+            args=(U_reduced, lambda_l2_aic),
+            method=optimization_method,
             jac=gradient,
             hess=hessian,
+            options={"gtol": 1e-4, "xtol": 1e-4, "barrier_tol": 1e-4},
         )
 
         # Update the full C_k with optimized values
@@ -347,8 +354,8 @@ def fit_precision_cholesky(
     _, p = U.shape
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
-    # 1. Find permutation yielding AMD ordering for C
-    Graph_C, perm_compose, P_rev, P_amd = find_sparsity_structure(
+    # 1. Find in-fill reducing ordering for C
+    Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure(
         Graph_u, verbose_level=verbose_level - 1
     )
 
@@ -365,4 +372,4 @@ def fit_precision_cholesky(
         print(f"Precision has log-determinant: {prec_logdet}")
 
     # 3. Unwrap C to yield precision
-    return P_amd @ P_rev @ (C.T @ C) @ P_rev @ P_amd.T
+    return P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
