@@ -97,6 +97,7 @@ def gershgorin_spd_adjustment(prec):
 
 def find_sparsity_structure(
     Graph_u: nx.Graph,
+    ordering_method: str = "best",
     verbose_level: int = 0,
 ) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
@@ -137,7 +138,7 @@ def find_sparsity_structure(
     )
 
     # PT prec P = LLT
-    chol_LLT = cholesky(SPD_Prec, ordering_method="amd")
+    chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
 
     # Get the AMD permutation vector
     perm_amd = chol_LLT.P()
@@ -262,7 +263,11 @@ def hessian(
 
 
 def optimize_sparse_affine_kr_map(
-    U: np.ndarray, G: nx.Graph, lambda_l2: float = 1.0, verbose_level: int = 0
+    U: np.ndarray,
+    G: nx.Graph,
+    lambda_l2: float = 1.0,
+    optimization_method: str = "L-BFGS-B",
+    verbose_level: int = 0,
 ) -> csc_matrix:
     """
     Optimizing the affine KR map with standard Gaussian reference  and l2
@@ -305,13 +310,15 @@ def optimize_sparse_affine_kr_map(
         U_reduced = U[:, non_zero_indices]
 
         # Optimization for reduced C_k
+        lambda_l2_aic = len(non_zero_indices)
         res = minimize(
             fun=objective_function,
             x0=C_k_reduced,
-            args=(U_reduced, lambda_l2),
-            method="trust-constr",
+            args=(U_reduced, lambda_l2_aic),
+            method=optimization_method,
             jac=gradient,
             hess=hessian,
+            options={"gtol": 1e-4, "xtol": 1e-4, "barrier_tol": 1e-4},
         )
 
         # Update the full C_k with optimized values
