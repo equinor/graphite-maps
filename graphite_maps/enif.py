@@ -269,7 +269,7 @@ class EnIF:
         ), "d and residual_noisy must have matching dimension"
 
         if verbose_level > 0:
-            chol_LLT = cholesky(self.Prec_u, ordering_method="amd")
+            chol_LLT = cholesky(self.Prec_u, ordering_method="best")
             prior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Prior precision log-determinant: {prior_logdet}")
 
@@ -285,7 +285,7 @@ class EnIF:
         self.Prec_u = self.Prec_u + self.H.T @ self.Prec_eps @ self.H
 
         if verbose_level > 0:
-            chol_LLT = cholesky(self.Prec_u, ordering_method="amd")
+            chol_LLT = cholesky(self.Prec_u, ordering_method="best")
             posterior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Posterior precision log-determinant: {posterior_logdet}")
 
