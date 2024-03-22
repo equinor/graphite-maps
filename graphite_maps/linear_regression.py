@@ -121,7 +121,7 @@ def calculate_influence(x, y, beta_estimate):
     return psi / M
 
 
-def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
+def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
     """Boost coefficients of linearly regressing y on standardized X.
 
     The coefficient selection utilizes information theoretic weighting. The
@@ -129,85 +129,49 @@ def boost_linear_regression(X, y, learning_rate=0.3, tol=1e-6, max_iter=10000):
     """
     n_samples, n_features = X.shape
     coefficients = np.zeros(n_features)
-    residuals, residuals_loo = y.copy(), y.copy()
-    y_mse = mse(y)
-    previous_residual_mse = y_mse
-    mse_factor = expected_max_chisq(n_features)
-    comparison_factor_aic = 1 + mse_factor / n_samples
-    # The (fast) AIC comparison factor assumes the AIC on mse as
-    # n_features/n_samples
+    residuals = y.copy()
+
     # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse
     # (residuals). This converges to TIC. Under certain conditions this is AIC.
     # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This
     #  needs to be adjusted for.
     # The mse_factor adjusts for this.
+    mse_factor = expected_max_chisq(n_features)
 
-    for iteration in range(max_iter):
-        coef_changes = np.zeros(n_features)
+    for _ in range(max_iter):
+        coef_changes = np.dot(X.T, residuals) / n_samples
 
-        # Calculate coefficient change for each feature
-        for feature in range(n_features):
-            coef_changes[feature] = (
-                np.dot(X[:, feature], residuals) / n_samples
-            )
-
-        # adjust based on information-criterion penalty
-        feature_evaluation = np.zeros(n_features)
-        for feature in range(n_features):
-            beta_estimate_j = coef_changes[feature]
-            residuals_j = residuals - beta_estimate_j * X[:, feature]
-            residual_mse_j = mse(
-                residuals_j
-            )  # np.cov(residuals_j, rowvar=False)
-            if coefficients[feature] == 0:
-                # add IC penalty: for mse, this is 1 x conditional variance
-                # (aic (fast) context), because feature is not added
-                # The added feature IC penalty is constant for both models,
-                # and therefore not added.
-                feature_evaluation[feature] = (
-                    residual_mse_j * comparison_factor_aic
-                )
-            else:
-                feature_evaluation[feature] = residual_mse_j
+        # Could be adjusted for IC -- some features already included
+        # The IC would build in additional motivation for sparsity
+        feature_evaluation = np.abs(coef_changes)
 
         # Select feature based on loss criterion
-        best_feature = np.argmin(feature_evaluation)
+        best_feature = np.argmax(feature_evaluation)
         beta_estimate = coef_changes[best_feature]
-        coef_change = beta_estimate * learning_rate
 
         # adjust to loo estimates for coef_change
         influence = calculate_influence(
             X[:, best_feature], residuals, beta_estimate
         )
         beta_estimate_loo = beta_estimate - influence / n_samples
-        coef_change_loo = beta_estimate_loo * learning_rate
 
-        # Make sure boosting should start at all
-        if iteration == 0:
-            residuals_full = y - beta_estimate * X[:, best_feature]
-            residuals_full_loo = y - beta_estimate_loo * X[:, best_feature]
-            if y_mse < mse(residuals_full) + mse_factor * (
-                mse(residuals_full_loo) - mse(residuals_full)
-            ):
-                break
+        residuals_full = residuals - beta_estimate * X[:, best_feature]
+        residuals_full_loo = residuals - beta_estimate_loo * X[:, best_feature]
 
-        # Update residuals
-        residuals -= coef_change * X[:, best_feature]
-        residuals_loo -= coef_change_loo * X[:, best_feature]
+        # Check if adding the full weight of the feature would decrease loss
+        if mse(residuals) < mse(residuals_full) + mse_factor * (
+            mse(residuals_full_loo) - mse(residuals_full)
+        ):
+            break
 
-        # Do loo-cv-square-maximized adjusted mse residual estimate
-        new_residual_mse = mse(residuals) + mse_factor * (
-            mse(residuals_loo) - mse(residuals)
-        )
+        coef_change = beta_estimate * learning_rate
 
         # Check for convergence
         if np.abs(coef_change) < tol:
             break
-        elif previous_residual_mse < new_residual_mse:
-            break
         else:
             # Update
-            previous_residual_mse = new_residual_mse
+            residuals -= coef_change * X[:, best_feature]
             coefficients[best_feature] += coef_change
 
     return coefficients
