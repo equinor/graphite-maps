@@ -1,8 +1,10 @@
 from typing import Optional
 import numpy as np
 from scipy.sparse import spmatrix, diags
+from scipy.sparse.linalg import cg
 from sksparse.cholmod import cholesky
 import networkx as nx
+from tqdm import tqdm
 
 from .precision_estimation import fit_precision_cholesky
 from . import linear_regression as lr
@@ -301,7 +303,10 @@ class EnIF:
         return updated_canonical
 
     def pullback_from_canonical(
-        self, updated_canonical: np.ndarray, verbose_level: int = 0
+        self,
+        updated_canonical: np.ndarray,
+        iterative: bool = False,
+        verbose_level: int = 0,
     ) -> np.ndarray:
         """
         Solve u = Prec * eta
@@ -310,10 +315,19 @@ class EnIF:
             print(
                 "Mapping canonical-scaled realizations to moment realization"
             )
-
-        # Compute sparse Cholesky factorization
-        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-        # Use the Cholesky factor to solve u = Prec * eta
-        updated_moment = chol_LLT.solve_A(updated_canonical.T).T
+        if iterative:
+            updated_moment = np.zeros(updated_canonical.shape)
+            print(updated_canonical.shape)
+            for i in tqdm(
+                range(updated_moment.shape[0]),
+                desc="Mapping data to moment parametrisation realization-by-realization",
+            ):
+                x, _ = cg(self.Prec_u, updated_canonical[i, :])
+                updated_moment[i, :] = x
+        else:
+            # Compute sparse Cholesky factorization
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            # Use the Cholesky factor to solve u = Prec * eta
+            updated_moment = chol_LLT.solve_A(updated_canonical.T).T
 
         return updated_moment
