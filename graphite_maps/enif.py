@@ -72,6 +72,7 @@ class EnIF:
         Y: Optional[np.ndarray] = None,
         learning_algorithm: Optional[str] = "LASSO",
         lambda_l2_precision: float = 1.0,
+        ordering_method: str = "metis",
         verbose_level: int = 0,
     ) -> None:
         """
@@ -80,7 +81,10 @@ class EnIF:
 
         if self.Prec_u is None:
             self.fit_precision(
-                U, lambda_l2_precision, verbose_level=verbose_level - 1
+                U,
+                lambda_l2_precision,
+                verbose_level=verbose_level - 1,
+                ordering_method=ordering_method,
             )
         elif verbose_level > 0:
             print(
@@ -139,7 +143,11 @@ class EnIF:
 
     # Low-level API methods
     def fit_precision(
-        self, U: np.ndarray, lambda_l2: float = 1.0, verbose_level: int = 0
+        self,
+        U: np.ndarray,
+        lambda_l2: float = 1.0,
+        ordering_method: str = "metis",
+        verbose_level: int = 0,
     ) -> None:
         """
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
@@ -149,6 +157,7 @@ class EnIF:
             self.Graph_u,
             lambda_l2=lambda_l2,
             verbose_level=verbose_level - 1,
+            ordering_method=ordering_method,
         )
 
     def fit_H(
@@ -186,7 +195,7 @@ class EnIF:
             print("Mapping realizations to canonical space")
 
         assert self.Prec_u is not None, "Precision must exist to pushforward"
-        Eta = (self.Prec_u @ U.T).T
+        Eta = U @ self.Prec_u.T
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
@@ -269,7 +278,7 @@ class EnIF:
         ), "d and residual_noisy must have matching dimension"
 
         if verbose_level > 0:
-            chol_LLT = cholesky(self.Prec_u, ordering_method="best")
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
             prior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Prior precision log-determinant: {prior_logdet}")
 
@@ -285,7 +294,7 @@ class EnIF:
         self.Prec_u = self.Prec_u + self.H.T @ self.Prec_eps @ self.H
 
         if verbose_level > 0:
-            chol_LLT = cholesky(self.Prec_u, ordering_method="best")
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
             posterior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Posterior precision log-determinant: {posterior_logdet}")
 
@@ -303,7 +312,7 @@ class EnIF:
             )
 
         # Compute sparse Cholesky factorization
-        chol_LLT = cholesky(self.Prec_u)
+        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
         # Use the Cholesky factor to solve u = Prec * eta
         updated_moment = chol_LLT.solve_A(updated_canonical.T).T
 

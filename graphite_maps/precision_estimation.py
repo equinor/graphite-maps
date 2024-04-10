@@ -1,11 +1,12 @@
 import numpy as np
 import networkx as nx
 import scipy.sparse as sp
+import time
 
 from scipy.optimize import minimize
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
-from scipy.sparse import lil_matrix, csc_matrix, tril
+from scipy.sparse import csc_matrix, tril
 
 from typing import Tuple, Any
 from numpy.typing import NDArray
@@ -25,23 +26,10 @@ def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
     scipy.sparse.csc_matrix
         CSC sparse matrix representing the precision matrix.
     """
-    # Determine size, p, from the number of nodes in the graph
-    p = len(graph.nodes)
-
-    # Initialize a LIL sparse matrix for easy value assignment
-    prec_matrix = lil_matrix((p, p))
-
-    # Iterate over the edges and set the corresponding elements to 1
-    for i, j in graph.edges():
-        prec_matrix[i, j] = 1
-        prec_matrix[j, i] = 1  # Ensure the matrix is symmetric
-
-    # Diagonal elements should be set to 1 (self-connection)
-    for i in range(p):
-        prec_matrix[i, i] = 1
-
-    # Convert the matrix to CSC format for efficient arithmetic and storage
-    return prec_matrix.tocsc()
+    prec = nx.to_scipy_sparse_array(graph)
+    prec.tolil()
+    prec.setdiag(1)
+    return prec.tocsc()
 
 
 def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
@@ -59,15 +47,7 @@ def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
         A NetworkX graph where each edge corresponds to a non-zero element
         the precision matrix.
     """
-    graph = nx.Graph()
-
-    # Iterate over non-zero elements of the matrix
-    rows, cols = precision_matrix.nonzero()
-    for i, j in zip(rows, cols):
-        if i <= j:  # Avoid double counting in symmetric matrix
-            graph.add_edge(i, j)
-
-    return graph
+    return nx.from_scipy_sparse_array(precision_matrix)
 
 
 def gershgorin_spd_adjustment(prec):
@@ -90,14 +70,14 @@ def gershgorin_spd_adjustment(prec):
     eps = 1e-1
     offdiag_abs_sum = np.abs(prec).sum(axis=1).A.ravel() - prec.diagonal()
     for i in range(prec.shape[0]):
-        if offdiag_abs_sum[i] > prec[i, i]:
+        if offdiag_abs_sum[i] >= prec[i, i]:
             prec[i, i] = offdiag_abs_sum[i] + eps
     return prec
 
 
 def find_sparsity_structure(
     Graph_u: nx.Graph,
-    ordering_method: str = "best",
+    ordering_method: str = "metis",
     verbose_level: int = 0,
 ) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
@@ -127,8 +107,17 @@ def find_sparsity_structure(
     p = len(Graph_u.nodes)
 
     # Create SPD matrix with same sparsity structure as Prec
-    SPD_Prec = graph_to_precision_matrix(Graph_u)
-    SPD_Prec = gershgorin_spd_adjustment(SPD_Prec)
+    SPD_Prec = nx.to_scipy_sparse_array(Graph_u, weight=None)
+    SPD_Prec = SPD_Prec.astype(np.float64)
+    # Use Gershgorin circle theorem to ensure SP
+    # This ensures all eigenvalues are in a circle centered at max_degree+1.0
+    # and radius < (max_degree+1.0), so guaranteed > 0
+    max_degree = max(dict(Graph_u.degree()).values())
+    if verbose_level > 0:
+        print(f"max degree of graph is: {max_degree}")
+    SPD_Prec.tolil()
+    SPD_Prec.setdiag(max_degree + 1.0)
+    SPD_Prec = sp.csc_matrix(SPD_Prec)
 
     # Create the reverse order permutation array
     perm_reverse = np.arange(p - 1, -1, -1)
@@ -138,7 +127,11 @@ def find_sparsity_structure(
     )
 
     # PT prec P = LLT
+    start = time.time()
     chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
+    end = time.time()
+    if verbose_level > 0:
+        print(f"Permutation optimization took {end-start} seconds")
 
     # Get the in-fill reducing permutation vector
     perm_order = chol_LLT.P()
@@ -159,13 +152,8 @@ def find_sparsity_structure(
     C_pattern = (P_rev @ L @ P_rev).T
 
     # Extract structure into a graph for C
-    G_C = nx.Graph()
-    G_C.add_nodes_from(range(p))
-    # Add edges exploiting the sparsity and lower triangular structure
-    rows, cols = C_pattern.nonzero()
-    for i, j in zip(rows, cols):
-        if i > j:  # Ensure lower triangular structure
-            G_C.add_edge(i, j)
+    G_C = nx.from_scipy_sparse_array(C_pattern)
+    G_C.remove_edges_from(nx.selfloop_edges(G_C))
 
     if verbose_level > 0:
         print(
@@ -199,6 +187,7 @@ def objective_function(
     float
         The value of `objective_function`.
     """
+    C_k[-1] = np.exp(C_k[-1])
     Su = U.dot(C_k)
     n, _ = U.shape
     regularization_l2 = 0.5 * lambda_l2 * np.sum(C_k[:-1] ** 2)
@@ -227,10 +216,12 @@ def gradient(
         The gradient of the objective function.
     """
     n, _ = U.shape
+    C_k[-1] = np.exp(C_k[-1])
     prediction = U.dot(C_k)
     grad = U.T.dot(prediction)
     grad[:-1] += lambda_l2 * C_k[:-1]  # Adjust for L2 regularization
     grad[-1] -= n / C_k[-1]  # Adjust for the -log|C_k,k| term
+    grad[-1] *= C_k[-1]  # Adjust for log-transform
     return grad
 
 
@@ -258,7 +249,9 @@ def hessian(
     n, _ = U.shape
     H = U.T.dot(U)
     np.fill_diagonal(H[:-1, :-1], H.diagonal()[:-1] + lambda_l2)  # L2-term
+    C_k[-1] = np.exp(C_k[-1])  # log-transform
     H[-1, -1] += n / (C_k[-1] ** 2)  # Adjust for the -log|C_k,k| term
+    H[-1, -1] *= 2.0 * C_k[-1]  # log-transform adjustment
     return H
 
 
@@ -268,6 +261,7 @@ def optimize_sparse_affine_kr_map(
     lambda_l2: float = 1.0,
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
+    use_tqdm=True,
 ) -> csc_matrix:
     """
     Optimizing the affine KR map with standard Gaussian reference  and l2
@@ -295,13 +289,15 @@ def optimize_sparse_affine_kr_map(
 
     # Initialize a sparse matrix for C_full
     C_full = sp.lil_matrix((p, p))  # lil_matrix for efficient row operations
-    C_full.setdiag(1)  # Set diagonal to 1
 
-    for k in tqdm(
-        range(p), desc="Learning precision Cholesky factor row-by-row"
-    ):
+    loop_function = (
+        tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
+        if use_tqdm
+        else range(p)
+    )
+
+    for k in loop_function:
         non_zero_indices = [j for j in G.neighbors(k) if j < k] + [k]
-        # print(non_zero_indices)
 
         # Extract the non-zero elements of C_k
         C_k_reduced = C_full[k, non_zero_indices].toarray().ravel()
@@ -310,19 +306,21 @@ def optimize_sparse_affine_kr_map(
         U_reduced = U[:, non_zero_indices]
 
         # Optimization for reduced C_k
-        lambda_l2_aic = len(non_zero_indices)
+        lambda_l2_aic = 2.0 * len(non_zero_indices)
         res = minimize(
             fun=objective_function,
             x0=C_k_reduced,
             args=(U_reduced, lambda_l2_aic),
             method=optimization_method,
             jac=gradient,
-            hess=hessian,
-            options={"gtol": 1e-4, "xtol": 1e-4, "barrier_tol": 1e-4},
+            # hess=hessian,
+            tol=1e-12,
+            options={"gtol": 1e-9},
         )
 
         # Update the full C_k with optimized values
         C_full[k, non_zero_indices] = res.x
+        C_full[k, k] = np.exp(C_full[k, k])  # res.x learns log diag
 
     # Convert to csc_matrix for efficient storage and arithmetic operations
     return C_full.tocsc()
@@ -332,7 +330,9 @@ def fit_precision_cholesky(
     U: np.ndarray,
     Graph_u: nx.Graph,
     lambda_l2: float = 1.0,
+    ordering_method: str = "metis",
     verbose_level: int = 0,
+    use_tqdm=True,
 ) -> np.ndarray:
     """
     Estimate the precision matrix using Cholesky decomposition.
@@ -356,14 +356,22 @@ def fit_precision_cholesky(
 
     # 1. Find in-fill reducing ordering for C
     Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure(
-        Graph_u, verbose_level=verbose_level - 1
+        Graph_u,
+        verbose_level=verbose_level - 1,
+        ordering_method=ordering_method,
     )
+    # print(f"permutation: {perm_compose}")
 
     # 2. Estimate non-zeroes of C
     U_perm = U[:, perm_compose]
     C = optimize_sparse_affine_kr_map(
-        U_perm, Graph_C, lambda_l2=lambda_l2, verbose_level=verbose_level - 1
+        U_perm,
+        Graph_C,
+        lambda_l2=lambda_l2,
+        verbose_level=verbose_level - 1,
+        use_tqdm=use_tqdm,
     )
+    # print(f"C: {C.A}")
 
     # 2.b Compute log-determinant of estimate, for logging
     if verbose_level > 0:
