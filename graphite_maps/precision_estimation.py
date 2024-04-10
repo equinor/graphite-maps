@@ -27,7 +27,8 @@ def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
         CSC sparse matrix representing the precision matrix.
     """
     prec = nx.to_scipy_sparse_array(graph)
-    prec = prec.tolil().setdiag(1)
+    prec.tolil()
+    prec.setdiag(1)
     return prec.tocsc()
 
 
@@ -46,15 +47,7 @@ def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
         A NetworkX graph where each edge corresponds to a non-zero element
         the precision matrix.
     """
-    graph = nx.Graph()
-
-    # Iterate over non-zero elements of the matrix
-    rows, cols = precision_matrix.nonzero()
-    for i, j in zip(rows, cols):
-        # if i <= j:  # Avoid double counting in symmetric matrix
-        graph.add_edge(i, j)
-
-    return graph
+    return nx.from_scipy_sparse_array(precision_matrix)
 
 
 def gershgorin_spd_adjustment(prec):
