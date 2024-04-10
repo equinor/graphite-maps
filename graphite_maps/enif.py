@@ -320,7 +320,8 @@ class EnIF:
             print(updated_canonical.shape)
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation realization-by-realization",
+                desc="Mapping data to moment parametrisation "
+                "realization-by-realization",
             ):
                 x, _ = cg(self.Prec_u, updated_canonical[i, :])
                 updated_moment[i, :] = x
