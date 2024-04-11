@@ -348,7 +348,7 @@ def fit_precision_cholesky(
     perm_compose: Optional[np.ndarray] = None,
     P_rev: Optional[csc_matrix] = None,
     P_order: Optional[csc_matrix] = None,
-) -> np.ndarray:
+) -> Tuple[csc_matrix, nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
     Estimate the precision matrix using Cholesky decomposition.
     An l2-regularized negative log-likelihood is minimized.
