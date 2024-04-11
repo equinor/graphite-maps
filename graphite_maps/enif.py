@@ -118,6 +118,7 @@ class EnIF:
         Y: np.ndarray,
         d: np.ndarray,
         seed: Optional[int] = None,
+        iterative: bool = False,
         verbose_level: int = 0,
     ) -> np.ndarray:
         """
@@ -149,7 +150,9 @@ class EnIF:
 
         # Bring realizations back
         return self.pullback_from_canonical(
-            canonical_updated, verbose_level=verbose_level - 1
+            canonical_updated,
+            iterative=iterative,
+            verbose_level=verbose_level - 1,
         )
 
     # Low-level API methods
