@@ -297,7 +297,7 @@ class EnIF:
             m,
         ), "d and residual_noisy must have matching dimension"
 
-        if verbose_level > 0:
+        if verbose_level > 5:
             chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
             prior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Prior precision log-determinant: {prior_logdet}")
