@@ -6,7 +6,10 @@ from sksparse.cholmod import cholesky
 import networkx as nx
 from tqdm import tqdm
 
-from .precision_estimation import fit_precision_cholesky
+from .precision_estimation import (
+    fit_precision_cholesky,
+    find_sparsity_structure_from_chol,
+)
 from . import linear_regression as lr
 
 
@@ -67,6 +70,12 @@ class EnIF:
         self.Prec_eps = Prec_eps
         self.H = H
         self.unexplained_variance: Optional[np.ndarray] = None
+
+        # Convenience for re-use of cholesky and ordering
+        self.Graph_C: Optional[nx.Graph] = None
+        self.perm_compose: Optional[np.ndarray] = None
+        self.P_rev: Optional[spmatrix] = None
+        self.P_order: Optional[spmatrix] = None
 
     def fit(
         self,
@@ -154,7 +163,13 @@ class EnIF:
         """
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
         """
-        self.Prec_u = fit_precision_cholesky(
+        (
+            self.Prec_u,
+            self.Graph_C,
+            self.perm_compose,
+            self.P_rev,
+            self.P_order,
+        ) = fit_precision_cholesky(
             U,
             self.Graph_u,
             lambda_l2=lambda_l2,
@@ -295,10 +310,16 @@ class EnIF:
         # posterior precision
         self.Prec_u = self.Prec_u + self.H.T @ self.Prec_eps @ self.H
 
-        if verbose_level > 0:
+        # Only print this if one really wants it. The cholesky can be heavy
+        if verbose_level > 5:
             chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
             posterior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Posterior precision log-determinant: {posterior_logdet}")
+
+            # Update the ordering knowledge
+            self.Graph_C, self.perm_compose, self.P_rev, self.P_order = (
+                find_sparsity_structure_from_chol(chol_LLT=chol_LLT)
+            )
 
         return updated_canonical
 
@@ -332,3 +353,16 @@ class EnIF:
             updated_moment = chol_LLT.solve_A(updated_canonical.T).T
 
         return updated_moment
+
+    @property
+    def C_structure_exists(self):
+        """Check if information from permuted Cholesky decomposition exists"""
+        if (
+            self.Graph_C is None
+            or self.perm_compose is None
+            or self.P_rev is None
+            or self.P_order is None
+        ):
+            return False
+        else:
+            return True
