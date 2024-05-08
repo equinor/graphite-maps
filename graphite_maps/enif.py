@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
 from scipy.sparse import spmatrix, diags
-from scipy.sparse.linalg import cg
+from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
 import networkx as nx
 from tqdm import tqdm
@@ -347,7 +347,8 @@ class EnIF:
                 desc="Mapping data to moment parametrisation "
                 "realization-by-realization",
             ):
-                x, _ = cg(self.Prec_u, updated_canonical[i, :])
+                # x, _ = cg(self.Prec_u, updated_canonical[i, :])
+                x, _ = bicgstab(self.Prec_u, updated_canonical[i, :])
                 updated_moment[i, :] = x
         else:
             # Compute sparse Cholesky factorization
