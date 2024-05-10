@@ -121,7 +121,9 @@ def calculate_influence(x, y, beta_estimate):
     return psi / M
 
 
-def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
+def boost_linear_regression(
+    X, y, learning_rate=0.5, tol=1e-6, max_iter=10000, effective_dimension=None
+):
     """Boost coefficients of linearly regressing y on standardized X.
 
     The coefficient selection utilizes information theoretic weighting. The
@@ -136,7 +138,9 @@ def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
     # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This
     #  needs to be adjusted for.
     # The mse_factor adjusts for this.
-    mse_factor = expected_max_chisq(n_features)
+    if effective_dimension is None:
+        effective_dimension = n_features
+    mse_factor = expected_max_chisq(np.ceil(effective_dimension))
 
     for _ in range(max_iter):
         coef_changes = np.dot(X.T, residuals) / n_samples
