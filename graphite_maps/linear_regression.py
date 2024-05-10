@@ -121,7 +121,9 @@ def calculate_influence(x, y, beta_estimate):
     return psi / M
 
 
-def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
+def boost_linear_regression(
+    X, y, learning_rate=0.5, tol=1e-6, max_iter=10000, effective_dimension=None
+):
     """Boost coefficients of linearly regressing y on standardized X.
 
     The coefficient selection utilizes information theoretic weighting. The
@@ -136,7 +138,9 @@ def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
     # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This
     #  needs to be adjusted for.
     # The mse_factor adjusts for this.
-    mse_factor = expected_max_chisq(n_features)
+    if effective_dimension is None:
+        effective_dimension = n_features
+    mse_factor = expected_max_chisq(np.ceil(effective_dimension))
 
     for _ in range(max_iter):
         coef_changes = np.dot(X.T, residuals) / n_samples
@@ -177,7 +181,9 @@ def boost_linear_regression(X, y, learning_rate=0.5, tol=1e-6, max_iter=10000):
     return coefficients
 
 
-def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
+def linear_boost_ic_regression(
+    U, Y, effective_dimension=None, verbose_level: int = 0
+):
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
     The complexity is tuned with an information theoretic approach.
@@ -229,7 +235,9 @@ def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
         y_j = Y_scaled[:, j]
 
         # Learn individual fit
-        coefficients_j = boost_linear_regression(U_scaled, y_j)
+        coefficients_j = boost_linear_regression(
+            U_scaled, y_j, effective_dimension
+        )
 
         # Extract coefficients
         for non_zero_ind in coefficients_j.nonzero()[0]:
