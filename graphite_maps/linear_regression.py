@@ -181,7 +181,9 @@ def boost_linear_regression(
     return coefficients
 
 
-def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
+def linear_boost_ic_regression(
+    U, Y, effective_dimension=None, verbose_level: int = 0
+):
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
     The complexity is tuned with an information theoretic approach.
@@ -233,7 +235,9 @@ def linear_boost_ic_regression(U, Y, verbose_level: int = 0):
         y_j = Y_scaled[:, j]
 
         # Learn individual fit
-        coefficients_j = boost_linear_regression(U_scaled, y_j)
+        coefficients_j = boost_linear_regression(
+            U_scaled, y_j, effective_dimension
+        )
 
         # Extract coefficients
         for non_zero_ind in coefficients_j.nonzero()[0]:
