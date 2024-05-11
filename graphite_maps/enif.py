@@ -339,7 +339,8 @@ class EnIF:
     ) -> np.ndarray:
         """
         Solve u = Prec * eta using selective updates for specified indices,
-        taking into account previously calculated values of X where appropriate.
+        taking into account previously calculated values of X where
+        appropriate.
         """
         assert self.Prec_u is spmatrix, "Prec_u must exist"
 
@@ -364,7 +365,10 @@ class EnIF:
         if iterative:
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation realization-by-realization",
+                desc="""
+                Mapping data to moment parametrisation
+                realization-by-realization
+                """,
             ):
                 if unchanged_indices.size > 0:
                     A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
@@ -397,14 +401,14 @@ class EnIF:
         verbose_level: int = 0,
     ):
         """
-        Determine the indices to update based on the specified order of neighbor propagation.
+        Determine indices to update based on the order of neighbor propagation.
 
         Parameters:
-        - neighbor_propagation_order: The number of levels of neighbors to include in the update set.
+        - neighbor_propagation_order: Levels of neighbors to include.
 
         Returns:
-        - update_indices: An array of indices that includes the initial predictors and their neighbors
-                        up to the specified order.
+        - update_indices: Array of indices that includes the initial
+            predictors and their neighbors up to the specified order.
         """
         assert self.H is spmatrix, "H must exist"
         assert self.Prec_u is spmatrix, "Prec_u must exist"
@@ -432,7 +436,8 @@ class EnIF:
 
         if verbose_level > 0:
             print(
-                f"Retrieving {len(all_nodes)} parameters out of a total {adjacency.shape[0]}"
+                f"Retrieving {len(all_nodes)} parameters out of a total "
+                f"{adjacency.shape[0]}"
             )
 
         return np.array(list(all_nodes))
