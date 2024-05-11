@@ -342,7 +342,7 @@ class EnIF:
         taking into account previously calculated values of X where
         appropriate.
         """
-        assert self.Prec_u is spmatrix, "Prec_u must exist"
+        assert self.Prec_u is not None, "Prec_u must exist"
 
         if verbose_level > 0:
             print(
@@ -365,10 +365,8 @@ class EnIF:
         if iterative:
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="""
-                Mapping data to moment parametrisation
-                realization-by-realization
-                """,
+                desc="Mapping data to moment parametrisation "
+                "realization-by-realization",
             ):
                 if unchanged_indices.size > 0:
                     A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
@@ -410,8 +408,8 @@ class EnIF:
         - update_indices: Array of indices that includes the initial
             predictors and their neighbors up to the specified order.
         """
-        assert self.H is spmatrix, "H must exist"
-        assert self.Prec_u is spmatrix, "Prec_u must exist"
+        assert self.H is not None, "H must exist"
+        assert self.Prec_u is not None, "Prec_u must exist"
 
         _, cols = self.H.nonzero()
         predictors = set(cols)
