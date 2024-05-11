@@ -117,6 +117,7 @@ class EnIF:
         U: np.ndarray,
         Y: np.ndarray,
         d: np.ndarray,
+        update_indices: Optional[np.ndarray] = None,
         seed: Optional[int] = None,
         iterative: bool = False,
         verbose_level: int = 0,
@@ -150,7 +151,9 @@ class EnIF:
 
         # Bring realizations back
         return self.pullback_from_canonical(
-            canonical_updated,
+            updated_canonical=canonical_updated,
+            update_indices=update_indices,
+            U_prior=U,
             iterative=iterative,
             verbose_level=verbose_level - 1,
         )
@@ -329,33 +332,110 @@ class EnIF:
     def pullback_from_canonical(
         self,
         updated_canonical: np.ndarray,
+        update_indices: Optional[np.ndarray] = None,
+        U_prior: Optional[np.ndarray] = None,
         iterative: bool = False,
         verbose_level: int = 0,
     ) -> np.ndarray:
         """
-        Solve u = Prec * eta
+        Solve u = Prec * eta using selective updates for specified indices,
+        taking into account previously calculated values of X where appropriate.
         """
+        assert self.Prec_u is spmatrix, "Prec_u must exist"
+
         if verbose_level > 0:
             print(
                 "Mapping canonical-scaled realizations to moment realization"
             )
-        if iterative:
+
+        p = updated_canonical.shape[1]  # Number of columns in the matrix
+        all_indices = np.arange(p)
+        if update_indices is None:
+            update_indices = np.arange(p)
+        unchanged_indices = np.setdiff1d(all_indices, update_indices)
+
+        if U_prior is None:
             updated_moment = np.zeros(updated_canonical.shape)
-            print(updated_canonical.shape)
+        else:
+            updated_moment = U_prior.copy()
+
+        A33 = self.Prec_u[update_indices, :][:, update_indices]
+
+        if iterative:
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation "
-                "realization-by-realization",
+                desc="Mapping data to moment parametrisation realization-by-realization",
             ):
-                x, _ = bicgstab(self.Prec_u, updated_canonical[i, :])
-                updated_moment[i, :] = x
+                if unchanged_indices.size > 0:
+                    A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
+                    Y32 = updated_canonical[i, update_indices] - A32.dot(
+                        updated_moment[i, unchanged_indices]
+                    )
+                else:
+                    Y32 = updated_canonical[i, update_indices]
+
+                x_updated, _ = bicgstab(A33, Y32)
+                updated_moment[i, update_indices] = x_updated
         else:
-            # Compute sparse Cholesky factorization
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            # Use the Cholesky factor to solve u = Prec * eta
-            updated_moment = chol_LLT.solve_A(updated_canonical.T).T
+            chol_LLT = cholesky(A33, ordering_method="metis")
+            if unchanged_indices.size > 0:
+                A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
+                Y32 = updated_canonical[:, update_indices].T - A32.dot(
+                    updated_moment[:, unchanged_indices].T
+                )
+            else:
+                Y32 = updated_canonical[:, update_indices].T
+
+            X32 = chol_LLT.solve_A(Y32).T
+            updated_moment[:, update_indices] = X32
 
         return updated_moment
+
+    def get_update_indices(
+        self,
+        neighbor_propagation_order=10,
+        verbose_level: int = 0,
+    ):
+        """
+        Determine the indices to update based on the specified order of neighbor propagation.
+
+        Parameters:
+        - neighbor_propagation_order: The number of levels of neighbors to include in the update set.
+
+        Returns:
+        - update_indices: An array of indices that includes the initial predictors and their neighbors
+                        up to the specified order.
+        """
+        assert self.H is spmatrix, "H must exist"
+        assert self.Prec_u is spmatrix, "Prec_u must exist"
+
+        _, cols = self.H.nonzero()
+        predictors = set(cols)
+        adjacency = self.Prec_u.copy()
+        all_nodes = set(predictors)  # Start with predictors
+
+        # Initialize sets to manage nodes
+        current_nodes = predictors.copy()
+        new_nodes = set()
+
+        # Iteratively find neighbors up to the specified order
+        for _ in range(neighbor_propagation_order):
+            temp_nodes = set()
+            for col in current_nodes:
+                neighbors = adjacency[:, col].nonzero()[0]
+                temp_nodes.update(neighbors)
+
+            # Update new_nodes with newly discovered nodes
+            new_nodes = temp_nodes.difference(all_nodes)
+            all_nodes.update(new_nodes)
+            current_nodes = new_nodes.copy()
+
+        if verbose_level > 0:
+            print(
+                f"Retrieving {len(all_nodes)} parameters out of a total {adjacency.shape[0]}"
+            )
+
+        return np.array(list(all_nodes))
 
     @property
     def C_structure_exists(self):
