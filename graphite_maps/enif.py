@@ -365,10 +365,8 @@ class EnIF:
         if iterative:
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="""
-                Mapping data to moment parametrisation
-                realization-by-realization
-                """,
+                desc="Mapping data to moment parametrisation"
+                "realization-by-realization",
             ):
                 if unchanged_indices.size > 0:
                     A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
