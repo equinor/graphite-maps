@@ -136,13 +136,14 @@ class EnIF:
         )
 
         # Work out residuals and associate unexplained variance
-        residual = self.response_residual(
+        residuals = self.response_residual(
             U, Y, verbose_level=verbose_level - 1
         )
+        # Due to observation error
         eps = self.generate_observation_noise(
             n, seed=seed, verbose_level=verbose_level - 1
         )
-        residual_noisy = residual + eps
+        residual_noisy = residuals + eps
 
         # Update in canonical parametrization
         canonical_updated = self.update_canonical(
@@ -232,7 +233,7 @@ class EnIF:
         eps_prec_diag = self.Prec_eps.diagonal()
         eps_variances = 1.0 / eps_prec_diag
         residual_noisy_var = self.unexplained_variance + eps_variances
-        Prec_r = diags(1.0 / residual_noisy_var, 0)
+        Prec_r = diags(1.0 / residual_noisy_var, 0, format="csc")
         assert (
             Prec_r.shape == self.Prec_eps.shape
         ), "Residuals and noise precision should have same shape"

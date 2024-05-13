@@ -297,6 +297,10 @@ def residual_variance(
     R = response_residual(U, Y, H)
     unexplained_variance = np.var(R, axis=0)
 
+    assert unexplained_variance.shape == (
+        m,
+    ), "Number of variance components must match number of observations"
+
     if verbose_level > 0:
         print("Calculating unexplained variance")
 
