@@ -155,15 +155,12 @@ class EnIF:
         )
 
         # Bring realizations back
-        return (
-            self.pullback_from_canonical(
-                updated_canonical=canonical_updated,
-                update_indices=update_indices,
-                U_prior=U,
-                iterative=iterative,
-                verbose_level=verbose_level - 1,
-            ),
-            canonical_updated,
+        return self.pullback_from_canonical(
+            updated_canonical=canonical_updated,
+            update_indices=update_indices,
+            U_prior=U,
+            iterative=iterative,
+            verbose_level=verbose_level - 1,
         )
 
     # Low-level API methods
