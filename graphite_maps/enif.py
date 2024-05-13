@@ -314,7 +314,7 @@ class EnIF:
             )
 
         # posterior precision
-        self.Prec_u = self.Prec_u + self.H.T @ self.Prec_eps @ self.H
+        self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H
 
         # Only print this if one really wants it. The cholesky can be heavy
         if verbose_level > 5:
@@ -365,7 +365,7 @@ class EnIF:
         if iterative:
             for i in tqdm(
                 range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation"
+                desc="Mapping data to moment parametrisation "
                 "realization-by-realization",
             ):
                 if unchanged_indices.size > 0:

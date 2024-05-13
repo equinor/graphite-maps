@@ -48,6 +48,10 @@ dependencies = [
     "tqdm",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["graphite_maps*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest",
