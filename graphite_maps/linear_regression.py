@@ -132,6 +132,7 @@ def boost_linear_regression(
     n_samples, n_features = X.shape
     coefficients = np.zeros(n_features)
     residuals = y.copy()
+    residuals_loo = y.copy()
 
     # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse
     # (residuals). This converges to TIC. Under certain conditions this is AIC.
@@ -160,7 +161,12 @@ def boost_linear_regression(
         beta_estimate_loo = beta_estimate - influence / n_samples
 
         residuals_full = residuals - beta_estimate * X[:, best_feature]
-        residuals_full_loo = residuals - beta_estimate_loo * X[:, best_feature]
+        residuals_full_loo = (
+            residuals_loo - beta_estimate_loo * X[:, best_feature]
+        )
+
+        if mse(residuals) < mse(residuals_full_loo):
+            break
 
         # Check if adding the full weight of the feature would decrease loss
         if mse(residuals) < mse(residuals_full) + mse_factor * (
@@ -169,6 +175,7 @@ def boost_linear_regression(
             break
 
         coef_change = beta_estimate * learning_rate
+        coef_change_loo = beta_estimate_loo * learning_rate
 
         # Check for convergence
         if np.abs(coef_change) < tol:
@@ -177,6 +184,9 @@ def boost_linear_regression(
             # Update
             residuals -= coef_change * X[:, best_feature]
             coefficients[best_feature] += coef_change
+
+            # loo update
+            residuals_loo -= coef_change_loo * X[:, best_feature]
 
     return coefficients
 
