@@ -34,12 +34,16 @@ def generate_gaussian_noise(
 
     m = Prec.shape[0]
     rng = np.random.default_rng(seed)
-    standard_normal_samples = rng.normal(size=(n, m))
-    cholesky_factor = cholesky(Prec)
+    eps = rng.normal(
+        loc=0, scale=np.sqrt(np.linalg.inv(Prec.A).diagonal()), size=(n, m)
+    )
+
+    # standard_normal_samples = rng.normal(size=(n, m))
+    # cholesky_factor = cholesky(Prec)
 
     # Transform the samples using the inverse Cholesky factor
     # This transformation results in samples from N(0, Prec^-1)
-    eps = cholesky_factor.solve_A(standard_normal_samples.T).T
+    # eps = cholesky_factor.solve_A(standard_normal_samples.T).T
 
     assert eps.shape == (n, m), "Sampling returns wrong size"
 
@@ -219,7 +223,7 @@ class EnIF:
             print("Mapping realizations to canonical space")
 
         assert self.Prec_u is not None, "Precision must exist to pushforward"
-        Eta = U @ self.Prec_u.T
+        Eta = U @ self.Prec_u
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
@@ -230,8 +234,7 @@ class EnIF:
         elif self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
 
-        eps_prec_diag = self.Prec_eps.diagonal()
-        eps_variances = 1.0 / eps_prec_diag
+        eps_variances = 1.0 / self.Prec_eps.diagonal()
         residual_noisy_var = self.unexplained_variance + eps_variances
         Prec_r = diags(1.0 / residual_noisy_var, 0, format="csc")
         assert (
@@ -306,13 +309,11 @@ class EnIF:
             prior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             print(f"Prior precision log-determinant: {prior_logdet}")
 
-        updated_canonical = np.empty((n, p))
+        updated_canonical = canonical.copy()
         Prec_r = self.Prec_residual_noisy(verbose_level=verbose_level - 1)
         for i in range(n):
             d_adjusted = d - residual_noisy[i, :]
-            updated_canonical[i, :] = (
-                canonical[i, :] + self.H.T @ Prec_r @ d_adjusted
-            )
+            updated_canonical[i, :] += self.H.T @ Prec_r @ d_adjusted
 
         # posterior precision
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H
