@@ -165,7 +165,7 @@ def boost_linear_regression(
             residuals_loo - beta_estimate_loo * X[:, best_feature]
         )
 
-        if mse(residuals) < mse(residuals_full_loo):
+        if mse(residuals_loo) < mse(residuals_full_loo):
             break
 
         # Check if adding the full weight of the feature would decrease loss
