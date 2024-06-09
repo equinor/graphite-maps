@@ -139,9 +139,9 @@ def boost_linear_regression(
     # At worst, we are maximizing squares. See Lunde 2020 Appendix A. This
     #  needs to be adjusted for.
     # The mse_factor adjusts for this.
-    if effective_dimension is None:
-        effective_dimension = n_features
-    mse_factor = expected_max_chisq(np.ceil(effective_dimension))
+    # if effective_dimension is None:
+    #    effective_dimension = n_features
+    # mse_factor = expected_max_chisq(np.ceil(effective_dimension))
 
     for _ in range(max_iter):
         coef_changes = np.dot(X.T, residuals) / n_samples
@@ -160,19 +160,19 @@ def boost_linear_regression(
         )
         beta_estimate_loo = beta_estimate - influence / n_samples
 
-        residuals_full = residuals - beta_estimate * X[:, best_feature]
+        # residuals_full = residuals - beta_estimate * X[:, best_feature]
         residuals_full_loo = (
             residuals_loo - beta_estimate_loo * X[:, best_feature]
         )
 
-        if mse(residuals) < mse(residuals_full_loo):
+        if mse(residuals_loo) < mse(residuals_full_loo):
             break
 
         # Check if adding the full weight of the feature would decrease loss
-        if mse(residuals) < mse(residuals_full) + mse_factor * (
-            mse(residuals_full_loo) - mse(residuals_full)
-        ):
-            break
+        # if mse(residuals) < mse(residuals_full) + mse_factor * (
+        #    mse(residuals_full_loo) - mse(residuals_full)
+        # ):
+        #    break
 
         coef_change = beta_estimate * learning_rate
         coef_change_loo = beta_estimate_loo * learning_rate
@@ -182,7 +182,7 @@ def boost_linear_regression(
             break
         else:
             # Update
-            residuals -= coef_change * X[:, best_feature]
+            # residuals -= coef_change * X[:, best_feature]
             coefficients[best_feature] += coef_change
 
             # loo update
