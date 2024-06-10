@@ -167,7 +167,6 @@ def boost_linear_regression(
         )
 
         if mse(residuals_loo) < mse(residuals_full_loo):
-            print(f"Stopping at iteration {_}")
             break
 
         # Check if adding the full weight of the feature would decrease loss
@@ -192,7 +191,7 @@ def boost_linear_regression(
 
     # ensure cutoff values -- very small if data standardized
     # prefer sparsity
-    cutoff = 1 / n_samples
+    cutoff = 2.0 * learning_rate / np.sqrt(n_samples)  # 2.0: 95% ci-ish
     coefficients[np.abs(coefficients) < cutoff] = 0
 
     return coefficients
