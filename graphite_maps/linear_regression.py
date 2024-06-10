@@ -162,7 +162,8 @@ def boost_linear_regression(
 
         # residuals_full = residuals - beta_estimate * X[:, best_feature]
         residuals_full_loo = (
-            residuals_loo - beta_estimate_loo * X[:, best_feature]
+            residuals_loo
+            - learning_rate * beta_estimate_loo * X[:, best_feature]
         )
 
         if mse(residuals_loo) < mse(residuals_full_loo):
