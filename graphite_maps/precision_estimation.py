@@ -1,15 +1,14 @@
-import numpy as np
-import networkx as nx
-import scipy.sparse as sp
 import time
+from typing import Any
 
+import networkx as nx
+import numpy as np
+import scipy.sparse as sp
+from numpy.typing import NDArray
 from scipy.optimize import minimize
+from scipy.sparse import csc_matrix, tril
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
-from scipy.sparse import csc_matrix, tril
-
-from typing import Tuple, Any, Optional
-from numpy.typing import NDArray
 
 
 def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
@@ -77,7 +76,7 @@ def gershgorin_spd_adjustment(prec):
 
 def find_sparsity_structure_from_chol(
     chol_LLT: csc_matrix,
-) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     L = chol_LLT.L()
     p = L.shape[0]
 
@@ -93,9 +92,7 @@ def find_sparsity_structure_from_chol(
     # Create the reverse order permutation array
     perm_reverse = np.arange(p - 1, -1, -1)
     # Create the reverse permutation matrix
-    P_rev = sp.csc_matrix(
-        (np.ones(p), (perm_reverse, np.arange(p))), shape=(p, p)
-    )
+    P_rev = sp.csc_matrix((np.ones(p), (perm_reverse, np.arange(p))), shape=(p, p))
 
     # Apply in-fill reducing ordering permutation to reverse permutation
     perm_compose = perm_order[perm_reverse]
@@ -118,7 +115,7 @@ def find_sparsity_structure_from_graph(
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
     verbose_level: int = 0,
-) -> Tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
     Finds sparsity structure for lower triangular C so that CTC = LLT = PTAP.
     The permutation P is optimized and returned, so is the non-zero structure
@@ -160,7 +157,7 @@ def find_sparsity_structure_from_graph(
     chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
     end = time.time()
     if verbose_level > 0:
-        print(f"Permutation optimization took {end-start} seconds")
+        print(f"Permutation optimization took {end - start} seconds")
 
     Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_chol(
         chol_LLT=chol_LLT
@@ -176,9 +173,7 @@ def find_sparsity_structure_from_graph(
     return Graph_C, perm_compose, P_rev, P_order
 
 
-def objective_function(
-    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
-) -> float:
+def objective_function(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> float:
     """
     Objective function for optimizing the affine KR map with standard Gaussian
     reference and l2 regularized dependence.
@@ -205,9 +200,7 @@ def objective_function(
     return 0.5 * np.sum(Su**2) - n * np.log(abs(C_k[-1])) + regularization_l2
 
 
-def gradient(
-    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
-) -> np.ndarray:
+def gradient(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarray:
     """
     Gradient of the objective function.
 
@@ -236,9 +229,7 @@ def gradient(
     return grad
 
 
-def hessian(
-    C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0
-) -> np.ndarray:
+def hessian(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarray:
     """
     Hessian `objective_function`.
 
@@ -344,11 +335,11 @@ def fit_precision_cholesky(
     ordering_method: str = "metis",
     verbose_level: int = 0,
     use_tqdm=True,
-    Graph_C: Optional[nx.Graph] = None,
-    perm_compose: Optional[np.ndarray] = None,
-    P_rev: Optional[csc_matrix] = None,
-    P_order: Optional[csc_matrix] = None,
-) -> Tuple[csc_matrix, nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+    Graph_C: nx.Graph | None = None,
+    perm_compose: np.ndarray | None = None,
+    P_rev: csc_matrix | None = None,
+    P_order: csc_matrix | None = None,
+) -> tuple[csc_matrix, nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
     """
     Estimate the precision matrix using Cholesky decomposition.
     An l2-regularized negative log-likelihood is minimized.
@@ -369,19 +360,12 @@ def fit_precision_cholesky(
     _, p = U.shape
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
-    if (
-        Graph_C is None
-        or perm_compose is None
-        or P_rev is None
-        or P_order is None
-    ):
+    if Graph_C is None or perm_compose is None or P_rev is None or P_order is None:
         # 1. Find in-fill reducing ordering for C
-        Graph_C, perm_compose, P_rev, P_order = (
-            find_sparsity_structure_from_graph(
-                Graph_u,
-                verbose_level=verbose_level - 1,
-                ordering_method=ordering_method,
-            )
+        Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(
+            Graph_u,
+            verbose_level=verbose_level - 1,
+            ordering_method=ordering_method,
         )
 
     # 2. Estimate non-zeroes of C

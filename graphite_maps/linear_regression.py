@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.sparse as sp
+from scipy.integrate import quad
 from scipy.sparse import spmatrix
 from scipy.stats import chi2
-from scipy.integrate import quad
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
@@ -43,7 +43,7 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
     assert n == n_y, "Number of samples in U and Y must be the same"
 
     if verbose_level > 0:
-        print(f"Learning sparse linear map of shape {(m,p)}")
+        print(f"Learning sparse linear map of shape {(m, p)}")
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -53,17 +53,13 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
 
     # Loop over features
     i_H, j_H, values_H = [], [], []
-    for j in tqdm(
-        range(m), desc="Learning sparse linear map for each response"
-    ):
+    for j in tqdm(range(m), desc="Learning sparse linear map for each response"):
         y_j = Y_scaled[:, j]
 
         # Learn individual regularization and fit
         eps = 1e-3
         max_iter = 10000
-        model_cv = LassoCV(
-            cv=10, fit_intercept=False, max_iter=max_iter, eps=eps
-        )
+        model_cv = LassoCV(cv=10, fit_intercept=False, max_iter=max_iter, eps=eps)
         model_cv.fit(U_scaled, y_j)
 
         # Extract coefficients
@@ -85,9 +81,9 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
 
     if verbose_level > 0:
         print(
-            f"Total elements: {m*p}\n"
+            f"Total elements: {m * p}\n"
             f"Non-zero elements: {H_sparse.nnz}\n"
-            f"Fraction of non-zeros: {H_sparse.nnz / (m*p)}"
+            f"Fraction of non-zeros: {H_sparse.nnz / (m * p)}"
         )
 
     return H_sparse
@@ -155,15 +151,12 @@ def boost_linear_regression(
         beta_estimate = coef_changes[best_feature]
 
         # adjust to loo estimates for coef_change
-        influence = calculate_influence(
-            X[:, best_feature], residuals, beta_estimate
-        )
+        influence = calculate_influence(X[:, best_feature], residuals, beta_estimate)
         beta_estimate_loo = beta_estimate - influence / n_samples
 
         # residuals_full = residuals - beta_estimate * X[:, best_feature]
         residuals_full_loo = (
-            residuals_loo
-            - learning_rate * beta_estimate_loo * X[:, best_feature]
+            residuals_loo - learning_rate * beta_estimate_loo * X[:, best_feature]
         )
 
         if mse(residuals_loo) < mse(residuals_full_loo):
@@ -235,7 +228,7 @@ def linear_boost_ic_regression(
     assert n == n_y, "Number of samples in U and Y must be the same"
 
     if verbose_level > 0:
-        print(f"Learning sparse linear map of shape {(m,p)}")
+        print(f"Learning sparse linear map of shape {(m, p)}")
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -245,9 +238,7 @@ def linear_boost_ic_regression(
 
     # Loop over features
     i_H, j_H, values_H = [], [], []
-    for j in tqdm(
-        range(m), desc="Learning sparse linear map for each response"
-    ):
+    for j in tqdm(range(m), desc="Learning sparse linear map for each response"):
         y_j = Y_scaled[:, j]
 
         # Learn individual fit
@@ -277,9 +268,9 @@ def linear_boost_ic_regression(
 
     if verbose_level > 0:
         print(
-            f"Total elements: {m*p}\n"
+            f"Total elements: {m * p}\n"
             f"Non-zero elements: {H_sparse.nnz}\n"
-            f"Fraction of non-zeros: {H_sparse.nnz / (m*p)}"
+            f"Fraction of non-zeros: {H_sparse.nnz / (m * p)}"
         )
 
     return H_sparse
@@ -313,9 +304,9 @@ def residual_variance(
     R = response_residual(U, Y, H)
     unexplained_variance = np.var(R, axis=0)
 
-    assert unexplained_variance.shape == (
-        m,
-    ), "Number of variance components must match number of observations"
+    assert unexplained_variance.shape == (m,), (
+        "Number of variance components must match number of observations"
+    )
 
     if verbose_level > 0:
         print("Calculating unexplained variance")

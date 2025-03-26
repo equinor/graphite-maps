@@ -1,20 +1,19 @@
-from typing import Optional
+import networkx as nx
 import numpy as np
-from scipy.sparse import spmatrix, diags
+from scipy.sparse import diags, spmatrix
 from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
-import networkx as nx
 from tqdm import tqdm
 
-from .precision_estimation import (
-    fit_precision_cholesky,
-    find_sparsity_structure_from_chol,
-)
 from . import linear_regression as lr
+from .precision_estimation import (
+    find_sparsity_structure_from_chol,
+    fit_precision_cholesky,
+)
 
 
 def generate_gaussian_noise(
-    n: int, Prec: spmatrix, seed: Optional[int] = None, verbose_level: int = 0
+    n: int, Prec: spmatrix, seed: int | None = None, verbose_level: int = 0
 ) -> np.ndarray:
     """
     Generates 'n' samples of Gaussian noise with precision 'Prec'.
@@ -51,8 +50,7 @@ def generate_gaussian_noise(
 
     if verbose_level > 0:
         print(
-            f"Sampling with seed={seed}\n"
-            f"Sampled Gaussian noise with shape {eps.shape}"
+            f"Sampling with seed={seed}\nSampled Gaussian noise with shape {eps.shape}"
         )
 
     return eps
@@ -62,32 +60,32 @@ class EnIF:
     def __init__(
         self,
         *,
-        Prec_u: Optional[spmatrix] = None,
-        Graph_u: Optional[nx.Graph] = None,
-        Prec_eps: Optional[spmatrix],
-        H: Optional[spmatrix] = None,
+        Prec_u: spmatrix | None = None,
+        Graph_u: nx.Graph | None = None,
+        Prec_eps: spmatrix | None,
+        H: spmatrix | None = None,
     ) -> None:
-        assert (
-            Prec_u is not None or Graph_u is not None
-        ), "Provide either Prec_u or Graph_u"
+        assert Prec_u is not None or Graph_u is not None, (
+            "Provide either Prec_u or Graph_u"
+        )
 
         self.Prec_u = Prec_u
         self.Graph_u = Graph_u
         self.Prec_eps = Prec_eps
         self.H = H
-        self.unexplained_variance: Optional[np.ndarray] = None
+        self.unexplained_variance: np.ndarray | None = None
 
         # Convenience for re-use of cholesky and ordering
-        self.Graph_C: Optional[nx.Graph] = None
-        self.perm_compose: Optional[np.ndarray] = None
-        self.P_rev: Optional[spmatrix] = None
-        self.P_order: Optional[spmatrix] = None
+        self.Graph_C: nx.Graph | None = None
+        self.perm_compose: np.ndarray | None = None
+        self.P_rev: spmatrix | None = None
+        self.P_order: spmatrix | None = None
 
     def fit(
         self,
         U: np.ndarray,
-        Y: Optional[np.ndarray] = None,
-        learning_algorithm: Optional[str] = "LASSO",
+        Y: np.ndarray | None = None,
+        learning_algorithm: str | None = "LASSO",
         lambda_l2_precision: float = 1.0,
         ordering_method: str = "metis",
         verbose_level: int = 0,
@@ -104,9 +102,7 @@ class EnIF:
                 ordering_method=ordering_method,
             )
         elif verbose_level > 0:
-            print(
-                "Precision u exists. Use `fit_precision` to refit if necessary"
-            )
+            print("Precision u exists. Use `fit_precision` to refit if necessary")
         if Y is not None:
             assert self.H is None, "Y should not be provided if H exists"
             self.fit_H(
@@ -123,8 +119,8 @@ class EnIF:
         U: np.ndarray,
         Y: np.ndarray,
         d: np.ndarray,
-        update_indices: Optional[np.ndarray] = None,
-        seed: Optional[int] = None,
+        update_indices: np.ndarray | None = None,
+        seed: int | None = None,
         iterative: bool = False,
         verbose_level: int = 0,
     ) -> np.ndarray:
@@ -137,14 +133,10 @@ class EnIF:
         assert d.shape == (m,), "Observations must match responses"
 
         # Map parameters to canonical parametrization
-        canonical = self.pushforward_to_canonical(
-            U, verbose_level=verbose_level - 1
-        )
+        canonical = self.pushforward_to_canonical(U, verbose_level=verbose_level - 1)
 
         # Work out residuals and associate unexplained variance
-        residuals = self.response_residual(
-            U, Y, verbose_level=verbose_level - 1
-        )
+        residuals = self.response_residual(U, Y, verbose_level=verbose_level - 1)
         # Due to observation error
         eps = self.generate_observation_noise(
             n, seed=seed, verbose_level=verbose_level - 1
@@ -194,16 +186,14 @@ class EnIF:
         self,
         U: np.ndarray,
         Y: np.ndarray,
-        learning_algorithm: Optional[str] = "LASSO",
+        learning_algorithm: str | None = "LASSO",
         verbose_level: int = 0,
     ) -> None:
         """
         Estimate H from data U using (sparse) linear regression
         """
         if learning_algorithm == "LASSO":
-            self.H = lr.linear_l1_regression(
-                U, Y, verbose_level=verbose_level - 1
-            )
+            self.H = lr.linear_l1_regression(U, Y, verbose_level=verbose_level - 1)
         elif learning_algorithm == "influence-boost":
             self.H = lr.linear_boost_ic_regression(
                 U, Y, verbose_level=verbose_level - 1
@@ -230,7 +220,6 @@ class EnIF:
         return Eta
 
     def Prec_residual_noisy(self, verbose_level: int = 0) -> spmatrix:
-
         if self.Prec_eps is None:
             raise ValueError("Prec_eps is not set.")
         elif self.unexplained_variance is None:
@@ -239,9 +228,9 @@ class EnIF:
         eps_variances = 1.0 / self.Prec_eps.diagonal()
         residual_noisy_var = self.unexplained_variance + eps_variances
         Prec_r = diags(1.0 / residual_noisy_var, 0, format="csc")
-        assert (
-            Prec_r.shape == self.Prec_eps.shape
-        ), "Residuals and noise precision should have same shape"
+        assert Prec_r.shape == self.Prec_eps.shape, (
+            "Residuals and noise precision should have same shape"
+        )
         if verbose_level > 0:
             print(
                 f"Total residual variance: {np.sum(residual_noisy_var)}\n"
@@ -259,9 +248,7 @@ class EnIF:
 
         self.residual_variance(U, Y, verbose_level=verbose_level - 1)
 
-        return lr.response_residual(
-            U, Y, self.H, verbose_level=verbose_level - 1
-        )
+        return lr.response_residual(U, Y, self.H, verbose_level=verbose_level - 1)
 
     def residual_variance(
         self, U: np.ndarray, Y: np.ndarray, verbose_level: int = 0
@@ -275,7 +262,7 @@ class EnIF:
         )
 
     def generate_observation_noise(
-        self, n: int, seed: Optional[int] = None, verbose_level: int = 0
+        self, n: int, seed: int | None = None, verbose_level: int = 0
     ) -> np.ndarray:
         """Sample n realizations of observation noise."""
         if n < 1:
@@ -302,9 +289,7 @@ class EnIF:
         n, p = canonical.shape
         n_r, m = residual_noisy.shape
         assert n == n_r, "canonical and residual_noisy must have equal samples"
-        assert d.shape == (
-            m,
-        ), "d and residual_noisy must have matching dimension"
+        assert d.shape == (m,), "d and residual_noisy must have matching dimension"
 
         if verbose_level > 5:
             chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
@@ -336,8 +321,8 @@ class EnIF:
     def pullback_from_canonical(
         self,
         updated_canonical: np.ndarray,
-        update_indices: Optional[np.ndarray] = None,
-        U_prior: Optional[np.ndarray] = None,
+        update_indices: np.ndarray | None = None,
+        U_prior: np.ndarray | None = None,
         iterative: bool = False,
         verbose_level: int = 0,
     ) -> np.ndarray:
@@ -349,9 +334,7 @@ class EnIF:
         assert self.Prec_u is not None, "Prec_u must exist"
 
         if verbose_level > 0:
-            print(
-                "Mapping canonical-scaled realizations to moment realization"
-            )
+            print("Mapping canonical-scaled realizations to moment realization")
 
         p = updated_canonical.shape[1]  # Number of columns in the matrix
         all_indices = np.arange(p)
@@ -448,12 +431,9 @@ class EnIF:
     @property
     def C_structure_exists(self):
         """Check if information from permuted Cholesky decomposition exists"""
-        if (
+        return not (
             self.Graph_C is None
             or self.perm_compose is None
             or self.P_rev is None
             or self.P_order is None
-        ):
-            return False
-        else:
-            return True
+        )

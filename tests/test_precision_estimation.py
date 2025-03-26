@@ -1,8 +1,7 @@
 import numpy as np
-from scipy.sparse import diags
-from scipy.linalg import det
-
 from graphite_maps import precision_estimation as precest
+from scipy.linalg import det
+from scipy.sparse import diags
 
 
 def test_precision_graph_conversion():

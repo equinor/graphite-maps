@@ -2,10 +2,10 @@ If you discover a security vulnerability in this project, please follow the step
 
 ### For "non-critical" issues
 
-- **Alternative A:**  
+- **Alternative A:**
 Create a GitHub issue for the vulnerability. Avoid putting sensitive information in the issue.
 
-- **Alternative B:**  
+- **Alternative B:**
 Send an email to the projects maintainer at [berl@equinor.com](mailto:berl@equinor.com) describing the issue.
 
 ### For "critical" and time sensitive issues
