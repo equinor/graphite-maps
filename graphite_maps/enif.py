@@ -35,7 +35,9 @@ def generate_gaussian_noise(
     m = Prec.shape[0]
     rng = np.random.default_rng(seed)
     eps = rng.normal(
-        loc=0, scale=np.sqrt(np.linalg.inv(Prec.A).diagonal()), size=(n, m)
+        loc=0,
+        scale=np.sqrt(np.linalg.inv(Prec.toarray()).diagonal()),
+        size=(n, m),
     )
 
     # standard_normal_samples = rng.normal(size=(n, m))
