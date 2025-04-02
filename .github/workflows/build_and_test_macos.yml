@@ -1,0 +1,141 @@
+name: Build and test MacOS
+
+on:
+ push:
+   branches:
+     - main
+   tags: "*"
+ pull_request:
+env:
+  UV_FROZEN: true         # https://docs.astral.sh/uv/configuration/environment/#uv_frozen
+
+jobs:
+  build-wheels-macos:
+    strategy:
+      matrix:
+        python-version: [ '3.11', '3.12' ]
+      fail-fast: false
+    runs-on: macos-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build the wheel
+        run: |
+          echo "Installing suite-sparse..."
+          brew install suite-sparse
+          suitesparse_dir="$(brew --prefix suitesparse)"
+          suite_sparse_inc="$suitesparse_dir/include/suitesparse"
+          suite_sparse_lib="$suitesparse_dir/lib"
+
+          echo "suite_sparse_inc=$suite_sparse_inc"
+          echo "suite_sparse_lib=$suite_sparse_lib"
+
+          pip install --upgrade pip setuptools wheel
+          git clone --branch v0.4.15 --single-branch https://github.com/scikit-sparse/scikit-sparse
+
+          echo "Doing editable scikit-sparse install"
+          SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel -e scikit-sparse
+
+          echo "copying scikit-sparse/sksparse to graphite_maps/sksparse ..."
+          cp -r scikit-sparse/sksparse graphite_maps/sksparse
+
+          # Breaks the install, fixes the wheel
+          echo "adding wheel-only setup.py..."
+          mv wheel_build_scripts/setup_wheels_only.py setup.py
+          SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel .
+
+          wheel_file=$(find . -name "graphite*.whl")
+          echo "wheel is at @wheel_file"
+          pip install delocate
+          delocate-wheel $(find . -name "graphite*.whl")
+          echo "Delocated wheel @$wheel_file successfully"
+      - name: Upload wheel as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Python ${{ matrix.python-version }} wheel
+          path: |
+            graphite*.whl
+
+  test-macos:
+    needs: [build-wheels-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ '3.11', '3.12' ]
+    runs-on: macos-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "Python ${{ matrix.python-version }} wheel"
+
+      - name: Install wheel
+        run: |
+          # Find the downloaded wheel file
+          wheel_file=$(find . -name "graphite*.whl" -print -quit)
+
+          echo "Found wheel file @ $wheel_file"
+
+          # Install the wheel
+          pip install "$wheel_file"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run EnIF unit tests
+        run: |
+          python -m pip install pytest
+          pytest
+
+      - name: Clone & install ERT repo
+        run: |
+          git clone --branch enif-in-ert-no-sksparse --single-branch https://github.com/yngve-sk/ert
+          echo "install enif branch  (point to eqn when enif merged in)"
+          cd ert
+          pip install ".[dev]"
+          pip uninstall scikit-sparse
+
+      - name: Run ERT EnIF tests
+        run: |
+          pytest -k "enif"
+
+      - name: Run ERT poly example with EnIF
+        run: |
+          ert ensemble_information_filter ert/test-data/ert/poly_example/poly.ert
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-wheels-macos, test-macos]
+    permissions:
+      id-token: write
+
+    # If this is a tagged release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+
+    steps:
+      - name: Get wheels
+        uses: actions/download-artifact@v4
+
+        with:
+          path: artifacts
+
+      - name: Move to dist/
+        run: |
+          mkdir dist
+          find artifacts -name "*.whl" -exec mv '{}' dist/ \;
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4
