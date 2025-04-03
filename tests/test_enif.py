@@ -134,3 +134,30 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
         U_posterior_enkf[i] = U[i] + (K @ innovation).ravel()
 
     assert np.allclose(U_posterior_enif, U_posterior_enkf, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "n, p, phi", [[100, 1000, 0.5], [200, 100, 0.3], [100, 1000, 0.9]]
+)
+def test_that_pullback_of_pushforward_equals_input(n, p, phi):
+    # Sample prior
+    U = nrar1(n, p, phi)
+
+    # Create the precision
+    Prec_u = create_ar1_precision(p, phi)
+
+    # Specify observations and associate uncertainty, and a linear map H
+    sd_eps = 1
+    H = np.array([0] * p, ndmin=2)
+    H[0, np.rint(p / 2).astype(int) - 1] = 1  # middle sencor
+    H = sp.sparse.csc_matrix(H)
+    Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
+    Prec_eps = sp.sparse.csc_matrix(Prec_eps)
+
+    # Notice: No update in canonical space
+    gtmap_pullpush = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
+    canonical = gtmap_pullpush.pushforward_to_canonical(U)
+    U_posterior = gtmap_pullpush.pullback_from_canonical(canonical)
+
+    # Due to no update, we should have equality
+    assert np.allclose(U, U_posterior, atol=1e-12)
