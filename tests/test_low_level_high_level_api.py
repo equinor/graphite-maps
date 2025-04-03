@@ -123,7 +123,7 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
     gtmap.fit(U, verbose_level=4)
     U_posterior_enif = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
 
-    # Create Kalman update
+    # Create Kalman update -- use same noise
     eps = gtmap.generate_observation_noise(n, seed=42)
     Sigma_u = np.linalg.inv(Prec_u.toarray())
     Sigma_d = H @ Sigma_u @ H.T + np.linalg.inv(Prec_eps.toarray())
