@@ -1,6 +1,4 @@
 import numpy as np
-
-np.set_printoptions(precision=3, suppress=True)
 import pytest
 import scipy as sp
 from graphite_maps.enif import EnIF
