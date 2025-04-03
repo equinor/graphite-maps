@@ -28,10 +28,7 @@ def nrar1(n, p, phi):
     return U
 
 
-def create_ar1_graph(p):
-    phi = 0.3
-
-    # create AR-1 precision matrix
+def create_ar1_precision(p, phi):
     Prec_u = sp.sparse.diags(
         [
             np.repeat(-phi, p - 1),
@@ -42,8 +39,14 @@ def create_ar1_graph(p):
         shape=(p, p),
         format="csc",
     )
+    return Prec_u
 
-    # create corresponding graph -- often we only know this
+
+def create_ar1_graph(p):
+    # Graph created through precision matrix
+    # Could be created directly
+    phi = 0.3
+    Prec_u = create_ar1_precision(p, phi)
     Graph_u = precision_to_graph(Prec_u)
     return Graph_u
 
@@ -91,3 +94,43 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
     )
 
     assert np.allclose(U_posterior_lowlevel, U_posterior_highlevel, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "n, p, phi", [[100, 1000, 0.5], [200, 100, 0.3], [100, 1000, 0.9]]
+)
+def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
+    # Sample prior
+    U = nrar1(n, p, phi)
+
+    # Create the precision
+    Prec_u = create_ar1_precision(p, phi)
+
+    # Specify observations and associate uncertainty, and a linear map H
+    d = np.array([30.0])
+    sd_eps = 1
+    H = np.array([0] * p, ndmin=2)
+    H[0, np.rint(p / 2).astype(int) - 1] = 1  # middle sencor
+    H = sp.sparse.csc_matrix(H)
+    Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
+    Prec_eps = sp.sparse.csc_matrix(Prec_eps)
+
+    # Run the "forward model"
+    Y = U @ H.T
+
+    # EnIF high-level API with known precision
+    gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
+    gtmap.fit(U, verbose_level=4)
+    U_posterior_enif = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
+
+    # Create Kalman update
+    eps = gtmap.generate_observation_noise(n, seed=42)
+    Sigma_u = np.linalg.inv(Prec_u.toarray())
+    Sigma_d = H @ Sigma_u @ H.T + np.linalg.inv(Prec_eps.toarray())
+    K = Sigma_u @ H.T @ np.linalg.inv(Sigma_d)
+    U_posterior_enkf = np.empty_like(U)
+    for i in range(n):
+        innovation = d - Y[i, 0] - eps[i, 0]  # scalar
+        U_posterior_enkf[i] = U[i] + (K @ innovation).ravel()
+
+    assert np.allclose(U_posterior_enif, U_posterior_enkf, atol=1e-12)
