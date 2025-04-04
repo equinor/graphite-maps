@@ -67,7 +67,7 @@ def gershgorin_spd_adjustment(prec):
     """
     prec = prec.copy().tocsc()
     eps = 1e-1
-    offdiag_abs_sum = np.abs(prec).sum(axis=1).A.ravel() - prec.diagonal()
+    offdiag_abs_sum = np.asarray(np.abs(prec).sum(axis=1)).ravel() - prec.diagonal()
     for i in range(prec.shape[0]):
         if offdiag_abs_sum[i] >= prec[i, i]:
             prec[i, i] = offdiag_abs_sum[i] + eps
