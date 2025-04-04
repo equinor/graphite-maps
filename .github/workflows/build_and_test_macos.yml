@@ -14,6 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: [ '3.11', '3.12' ]
+      fail-fast: false
     runs-on: macos-latest
     steps:
       - name: Set up Python
@@ -48,10 +49,11 @@ jobs:
           mv wheel_build_scripts/setup_wheels_only.py setup.py
           SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel .
 
+          wheel_file=$(find . -name "graphite*.whl")
+          echo "wheel is at @wheel_file"
           pip install delocate
           delocate-wheel $(find . -name "graphite*.whl")
-          echo "Delocated!"
-          echo "Built wheel successfully"
+          echo "Delocated wheel @$wheel_file successfully"
       - name: Upload wheel as artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,22 +80,39 @@ jobs:
         with:
           name: "Python ${{ matrix.python-version }} wheel"
 
-      - name: Install wheel & run ENIF poly example
+      - name: Install wheel
         run: |
-          echo "install enif branch  (point to eqn when enif merged in)"
-          pip install git+https://github.com/yngve-sk/ert@enif-in-ert-no-sksparse
-
-          pip uninstall scikit-sparse
-
           # Find the downloaded wheel file
           wheel_file=$(find . -name "graphite*.whl" -print -quit)
 
-          echo "Found wheel file: $wheel_file"
+          echo "Found wheel file @ $wheel_file"
 
           # Install the wheel
           pip install "$wheel_file"
 
-          git clone https://github.com/equinor/ert
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run EnIF unit tests
+        run: |
+          python -m pip install pytest
+          pytest
+
+      - name: Clone & install ERT repo
+        run: |
+          git clone --branch enif-in-ert-no-sksparse --single-branch https://github.com/yngve-sk/ert
+          echo "install enif branch  (point to eqn when enif merged in)"
+          cd ert
+          pip install ".[dev]"
+          pip uninstall scikit-sparse
+
+      - name: Run ERT EnIF tests
+        run: |
+          pytest -k "enif"
+
+      - name: Run ERT poly example with EnIF
+        run: |
           ert ensemble_information_filter ert/test-data/ert/poly_example/poly.ert
 
   publish:
