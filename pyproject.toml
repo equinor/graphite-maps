@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=42", "numpy"]
+requires = ["setuptools>=42", "numpy", "setuptools_scm>=8.1"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "graphite_maps/version.py"
 
 [project]
 name = "graphite-maps"
-version = "0.1.0"
 description = "Ensemble based data assimilation learning graph informed triangular ensemble-to-posterior transport maps from data"
 authors = [{name = "Berent Lunde"}]
 requires-python = ">=3.10, <3.13"
@@ -15,6 +17,7 @@ dependencies = [
     "networkx",
     "tqdm",
 ]
+dynamic = ["version"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -24,7 +27,7 @@ include = ["graphite_maps*"]
 dev = [
     "pre-commit",
     "pytest",
-    "scikit-sparse"
+    "scikit-sparse" # Must be installed with linking towards libsuitesparse
 ]
 
 [tool.pytest.ini_options]
