@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "graphite-maps"
-version = "0.1.0"
+version = "0.0a0" # Temporary when setting up publishing
 description = "Ensemble based data assimilation learning graph informed triangular ensemble-to-posterior transport maps from data"
 authors = [{name = "Berent Lunde"}]
 requires-python = ">=3.10, <3.13"
