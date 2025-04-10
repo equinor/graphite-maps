@@ -48,7 +48,7 @@ jobs:
           echo "adding wheel-only setup.py..."
           mv wheel_build_scripts/setup_wheels_only.py setup.py
 
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/tags/*" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "Making dirty wheel appear clean..."
             echo "Setting SETUPTOOLS_SCM_PRETEND_VERSION to ${{ github.ref_name }}"
             export SETUPTOOLS_SCM_PRETEND_VERSION="${{ github.ref_name }}"
