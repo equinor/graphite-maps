@@ -47,4 +47,4 @@ fixed_wheel_path=$(find fixed_wheel -name "*.whl")
 
 echo "Replacing broken wheel @ $wheel_path with fixed wheel @ $fixed_wheel_path"
 rm $wheel_path
-mv $fixed_wheel_path $wheel_path
+mv $fixed_wheel_path $(dirname $wheel_path)
