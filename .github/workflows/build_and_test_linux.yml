@@ -24,13 +24,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Set IS_TAG environment variable
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "IS_TAG=true" >> $GITHUB_ENV
+          else
+            echo "IS_TAG=false" >> $GITHUB_ENV
+          fi
+
       - name: build-wheels-linux
         uses: docker://quay.io/pypa/manylinux2014_x86_64
         env:
+          IS_TAG: ${{ env.IS_TAG }}
           PYTHON_VERSION: ${{ matrix.python-version }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
         with:
           entrypoint: /bin/bash
-          args: '-c "sh wheel_build_scripts/build_wheels_linux.sh ${{ matrix.python-version }}"'
+          args: '-c "sh wheel_build_scripts/build_wheels_linux.sh"'
 
       - name: Upload wheel as artifact
         if: always()
