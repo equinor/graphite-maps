@@ -387,3 +387,64 @@ def fit_precision_cholesky(
     # 3. Unwrap C to yield precision
     Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
     return Prec, Graph_C, perm_compose, P_rev, P_order
+
+
+def fit_precision_cholesky_approximate(
+    U: np.ndarray,
+    G: nx.Graph,
+    neighbourhood_expansion: int = 2,
+    optimization_method: str = "L-BFGS-B",
+    verbose_level: int = 0,
+    use_tqdm=True,
+) -> csc_matrix:
+    """
+    Estimate the precision matrix using approximate Cholesky.
+    The Cholesky is assumed as sparse as the corresponding precision, with
+    sparsity pattern from G, but with increased neighbourhood. This is
+    akin to a Vecchia approximation, which is alleviated by the neighbourhood
+    expansion.
+
+    No permutation optimisation is performed. It is beneficial if U and G have
+    a "sensible" ordering. This may e.g. be that neighbours defined by G are
+    close in U.
+
+    Parameters
+    ----------
+    U : np.ndarray
+        The data matrix.
+    G : networkx.Graph
+        The graph representing the non-zero structure in C.
+    neighbourhood_expansion: int, optional
+        The number of hops to the new neighbourhood set
+
+    Returns
+    -------
+    scipy.sparse.csc_matrix
+        The optimized sparse Cholesky factor of the precision matrix.
+    """
+
+    # Assuming Graph_u already exists
+    G_expanded = nx.Graph()
+
+    for node in G.nodes():
+        hops = nx.single_source_shortest_path_length(
+            G, node, cutoff=neighbourhood_expansion
+        )
+
+        for neighbor in hops:
+            # Add the nodes and edges between them
+            G_expanded.add_node(node)
+            G_expanded.add_node(neighbor)
+            G_expanded.add_edge(node, neighbor)
+
+    C = optimize_sparse_affine_kr_map(
+        U,
+        G_expanded,
+        optimization_method=optimization_method,
+        verbose_level=verbose_level - 1,
+        use_tqdm=use_tqdm,
+    )
+
+    Prec_approx = C.T @ C
+
+    return Prec_approx
