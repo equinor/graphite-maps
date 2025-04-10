@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "graphite_maps/version.py"
+version_scheme = "only-version"
 
 [project]
 name = "graphite-maps"
