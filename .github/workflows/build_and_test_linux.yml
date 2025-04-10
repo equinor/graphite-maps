@@ -33,7 +33,7 @@ jobs:
           fi
 
       - name: build-wheels-linux
-        uses: docker://quay.io/pypa/manylinux2014_x86_64
+        uses: docker://quay.io/pypa/manylinux2020_x86_64
         env:
           IS_TAG: ${{ env.IS_TAG }}
           PYTHON_VERSION: ${{ matrix.python-version }}
