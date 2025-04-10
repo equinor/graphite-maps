@@ -47,6 +47,14 @@ jobs:
           # Breaks the install, fixes the wheel
           echo "adding wheel-only setup.py..."
           mv wheel_build_scripts/setup_wheels_only.py setup.py
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/tags/*" ]]; then
+            echo "Making dirty wheel appear clean..."
+            echo "Setting SETUPTOOLS_SCM_PRETEND_VERSION to ${{ github.ref_name }}"
+            export SETUPTOOLS_SCM_PRETEND_VERSION="${{ github.ref_name }}"
+            echo "Set env SETUPTOOLS_SCM_PRETEND_VERSION to ${{ github.ref_name }}"
+          fi
+
           SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel .
 
           wheel_file=$(find . -name "graphite*.whl")

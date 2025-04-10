@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-if [ -z "$1" ]; then
-  echo "Please provide a Python version as an argument (e.g., 3.10)"
+if [ -z "$PYTHON_VERSION" ]; then
+  echo "Please provide a Python version in the PYTHON_VERSION env variable"
   exit 1
 fi
 
@@ -10,7 +10,7 @@ INSTALL_DIR=/github/workspace/deps_build
 
 pushd /tmp
 
-python_exec=$(which python$1)
+python_exec=$(which python$PYTHON_VERSION)
 $python_exec -m venv myvenv
 source ./myvenv/bin/activate
 
@@ -30,6 +30,13 @@ echo "adding wheel-only setup.py..."
 mv wheel_build_scripts/setup_wheels_only.py setup.py
 
 echo "Making wheel..."
+
+if [ "$IS_TAG" = "true" ]; then
+  echo "Making dirty wheel appear clean..."
+  echo "Setting SETUPTOOLS_SCM_PRETEND_VERSION to ${GITHUB_REF_NAME}"
+  export SETUPTOOLS_SCM_PRETEND_VERSION="${GITHUB_REF_NAME}"
+  echo "Set env SETUPTOOLS_SCM_PRETEND_VERSION to ${GITHUB_REF_NAME}"
+fi
 LD_LIBRARY_PATH=/usr/lib64:$LD_LIBRARY_PATH pip wheel .
 echo "Done making wheel"
 
