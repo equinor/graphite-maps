@@ -29,4 +29,10 @@ setup(
             libraries=["cholmod"],
         )
     ],
+    license_files=[
+        "LICENSE",
+        "LICENSE_scikit_sparse.txt",
+        "LICENSE_libsuitesparse_cholmod.txt",
+        "LICENSE_libsuitesparse.txt",
+    ],
 )
