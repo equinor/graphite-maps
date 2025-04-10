@@ -24,6 +24,9 @@ LD_LIBRARY_PATH=/usr/lib64:$LD_LIBRARY_PATH pip install --editable scikit-sparse
 popd
 echo "copying sksparse into graphite_maps/sksparse"
 cp -r /tmp/scikit-sparse/sksparse graphite_maps/sksparse
+cp /tmp/scikit-sparse/LICENSE.txt graphite_maps/LICENSE_scikit_sparse.txt
+cp wheel_build_scripts/LICENSE_libsuitesparse_cholmod.txt ./LICENSE_libsuitesparse_cholmod.txt
+cp wheel_build_scripts/LICENSE_libsuitesparse.txt ./LICENSE_libsuitesparse.txt
 
 # Breaks the install, fixes the wheel
 echo "adding wheel-only setup.py..."

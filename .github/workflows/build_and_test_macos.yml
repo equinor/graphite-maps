@@ -43,6 +43,9 @@ jobs:
 
           echo "copying scikit-sparse/sksparse to graphite_maps/sksparse ..."
           cp -r scikit-sparse/sksparse graphite_maps/sksparse
+          cp scikit-sparse/LICENSE.txt graphite_maps/LICENSE_scikit_sparse.txt
+          cp wheel_build_scripts/LICENSE_libsuitesparse_cholmod.txt ./LICENSE_libsuitesparse_cholmod.txt
+          cp wheel_build_scripts/LICENSE_libsuitesparse.txt ./LICENSE_libsuitesparse.txt
 
           # Breaks the install, fixes the wheel
           echo "adding wheel-only setup.py..."
