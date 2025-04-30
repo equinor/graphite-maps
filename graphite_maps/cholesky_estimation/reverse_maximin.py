@@ -91,7 +91,8 @@ def reverse_maxmin_ordering(
         if j == i0:
             continue
         # Update the heap
-        # In algorithm C.1 there is a sort on dij. We moved to conditional sorting that j is at some point selected as a parent k
+        # In algorithm C.1 there is a sort on dij.
+        # We moved to conditional sorting. If j is selected as a parent k
         dij = _manhattan(xi, coords[j])
         if dij < l[j]:
             l[j] = dij
