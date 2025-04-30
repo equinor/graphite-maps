@@ -60,12 +60,11 @@ def reverse_maxmin_ordering(
     verbose: bool = False,
 ) -> tuple[list[int], dict[int, set[int]]]:
     """
-    Reverse-maximin ordering from Appendix C.1
+    Reverse-maximin ordering from Appendix C.1 of Schäfer et al. (2021), "Sparse Cholesky Factorization by Kullback-Leibler Minimization"
     """
     N = len(grid_points)
     coords = grid_points.astype(np.float64, copy=False)
 
-    # ------------------ state ----------------------------------------
     l = dist_to_boundary.copy()
     selected = np.zeros(N, dtype=np.bool_)
     not_selected = set(range(N))
@@ -91,6 +90,8 @@ def reverse_maxmin_ordering(
         children[i0].append(j)
         if j == i0:
             continue
+        # Update the heap
+        # In algorithm C.1 there is a sort on dij. We moved to conditional sorting that j is at some point selected as a parent k
         dij = _manhattan(xi, coords[j])
         if dij < l[j]:
             l[j] = dij
@@ -109,7 +110,7 @@ def reverse_maxmin_ordering(
         not_selected.remove(i)
         ordering_idx.append(i)
 
-        # ---- choose parent k (Alg. C.1 lines 23-32) ----------------
+        # ---- choose parent k (Alg. C.1 lines 28-29) ----------------
         k = i0
         distik = np.inf
         for j in parents[i]:
@@ -135,7 +136,8 @@ def reverse_maxmin_ordering(
             if j == i:
                 continue
             djk = _manhattan(coords[j], xk)
-            if djk > distik + r_li:  # triangle inequality pruning
+            # triangle inequality pruning. exit early. slightly different form paper, but otherwise the sorting does not make a lot of sense.
+            if djk > distik + r_li:
                 break
 
             dij = _manhattan(xi, coords[j])
@@ -148,7 +150,7 @@ def reverse_maxmin_ordering(
                 children[i].append(j)
                 parents[j].append(i)
 
-        # ---- truncation test (lines 43-49) ----
+        # ---- truncation test (lines 42-49) ----
         # This ensures linear space complexity
         # Modification of reference algorithm Schäfer 2020 Algorithm 4.1
         cond = True
