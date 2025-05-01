@@ -20,6 +20,7 @@ References:
 
 from collections import defaultdict
 
+import networkx as nx
 import numba as nb
 import numpy as np
 from heapdict import heapdict
@@ -179,3 +180,22 @@ def reverse_maxmin_ordering(
         sparsity[i].add(i)
 
     return ordering_idx, sparsity
+
+
+def kr_graph_from_revmaximin(sparsity: dict, ordering_revmaxmin_chol: list):
+    """
+    Builds a directed graph for the KR map from the reverse-maximin ordering and sparsity pattern.
+
+    Returns
+    -------
+    networkx.DiGraph
+    """
+    reverse_ordering = {value: ind for ind, value in enumerate(ordering_revmaxmin_chol)}
+    Graph_kr = nx.DiGraph()
+    for row, cols in sparsity.items():
+        row_idx = reverse_ordering[row]
+        for col in cols:
+            col_idx = reverse_ordering[col]
+            if row_idx >= col_idx:  # only lower triangle
+                Graph_kr.add_edge(row_idx, col_idx)
+    return Graph_kr
