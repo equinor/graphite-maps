@@ -339,7 +339,13 @@ class EnIF:
         p = updated_canonical.shape[1]  # Number of columns in the matrix
         all_indices = np.arange(p)
         if update_indices is None:
-            update_indices = np.arange(p)
+            update_indices = np.arange(p, dtype=int)
+
+        update_indices = (
+            update_indices.astype(int)
+            if update_indices.size > 0
+            else np.array([], dtype=int)
+        )
         unchanged_indices = np.setdiff1d(all_indices, update_indices)
 
         if U_prior is None:
@@ -347,36 +353,36 @@ class EnIF:
         else:
             updated_moment = U_prior.copy()
 
-        A33 = self.Prec_u[update_indices, :][:, update_indices]
+        if update_indices.size > 0:
+            A33 = self.Prec_u[update_indices, :][:, update_indices]
 
-        if iterative:
-            for i in tqdm(
-                range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation "
-                "realization-by-realization",
-            ):
+            if iterative:
+                for i in tqdm(
+                    range(updated_moment.shape[0]),
+                    desc="Mapping data to moment parametrisation realization-by-realization",
+                ):
+                    if unchanged_indices.size > 0:
+                        A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
+                        Y32 = updated_canonical[i, update_indices] - A32.dot(
+                            updated_moment[i, unchanged_indices]
+                        )
+                    else:
+                        Y32 = updated_canonical[i, update_indices]
+
+                    x_updated, _ = bicgstab(A33, Y32)
+                    updated_moment[i, update_indices] = x_updated
+            else:
+                chol_LLT = cholesky(A33, ordering_method="metis")
                 if unchanged_indices.size > 0:
                     A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
-                    Y32 = updated_canonical[i, update_indices] - A32.dot(
-                        updated_moment[i, unchanged_indices]
+                    Y32 = updated_canonical[:, update_indices].T - A32.dot(
+                        updated_moment[:, unchanged_indices].T
                     )
                 else:
-                    Y32 = updated_canonical[i, update_indices]
+                    Y32 = updated_canonical[:, update_indices].T
 
-                x_updated, _ = bicgstab(A33, Y32)
-                updated_moment[i, update_indices] = x_updated
-        else:
-            chol_LLT = cholesky(A33, ordering_method="metis")
-            if unchanged_indices.size > 0:
-                A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
-                Y32 = updated_canonical[:, update_indices].T - A32.dot(
-                    updated_moment[:, unchanged_indices].T
-                )
-            else:
-                Y32 = updated_canonical[:, update_indices].T
-
-            X32 = chol_LLT.solve_A(Y32).T
-            updated_moment[:, update_indices] = X32
+                X32 = chol_LLT.solve_A(Y32).T
+                updated_moment[:, update_indices] = X32
 
         return updated_moment
 
