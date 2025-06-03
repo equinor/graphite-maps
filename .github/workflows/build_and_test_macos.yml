@@ -112,8 +112,8 @@ jobs:
 
       - name: Clone & install ERT repo
         run: |
-          git clone --branch enif-in-ert-no-sksparse --single-branch https://github.com/yngve-sk/ert
-          echo "install enif branch  (point to eqn when enif merged in)"
+          git clone --branch main --single-branch https://github.com/equinor/ert
+          echo "install ert main branch"
           cd ert
           pip install ".[dev]"
           pip uninstall scikit-sparse
