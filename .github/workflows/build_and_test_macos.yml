@@ -36,7 +36,7 @@ jobs:
           echo "suite_sparse_lib=$suite_sparse_lib"
 
           pip install --upgrade pip setuptools wheel
-          git clone --branch v0.4.15 --single-branch https://github.com/scikit-sparse/scikit-sparse
+          git clone --branch v0.4.16 --single-branch https://github.com/scikit-sparse/scikit-sparse
 
           echo "Doing editable scikit-sparse install"
           SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel -e scikit-sparse

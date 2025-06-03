@@ -18,7 +18,7 @@ yum install -y suitesparse-devel
 python -m pip install --upgrade pip
 pip install --upgrade setuptools wheel auditwheel
 
-git clone --branch v0.4.15 --single-branch https://github.com/scikit-sparse/scikit-sparse
+git clone --branch v0.4.16 --single-branch https://github.com/scikit-sparse/scikit-sparse
 LD_LIBRARY_PATH=/usr/lib64:$LD_LIBRARY_PATH pip install --editable scikit-sparse
 
 popd
