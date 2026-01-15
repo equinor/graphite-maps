@@ -169,7 +169,6 @@ def boost_linear_regression(
         #    break
 
         coef_change = beta_estimate * learning_rate
-        coef_change_loo = beta_estimate_loo * learning_rate
 
         # Check for convergence
         if np.abs(coef_change) < tol:
@@ -180,7 +179,7 @@ def boost_linear_regression(
             coefficients[best_feature] += coef_change
 
             # loo update
-            residuals_loo -= coef_change_loo * X[:, best_feature]
+            residuals_loo = residuals_full_loo
 
     # ensure cutoff values -- very small if data standardized
     # prefer sparsity
