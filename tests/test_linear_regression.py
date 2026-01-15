@@ -10,34 +10,23 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 
 
-def standardize_data(X, y):
-    scaler_X = StandardScaler().fit(X)
-    X_scaled = scaler_X.transform(X)
-
-    scaler_y = StandardScaler().fit(y.reshape(-1, 1))
-    y_scaled = scaler_y.transform(y.reshape(-1, 1)).flatten()
-
-    return X_scaled, y_scaled, scaler_X, scaler_y
-
-
 def generate_data(n, p_noisy, seed=42):
     """3 signal features and p_noisy noisy ones. All standardized."""
     rng = np.random.default_rng(seed)
 
-    X1 = rng.random((n, 1))
-    X2 = rng.random((n, 1))
-    X3 = rng.random((n, 1))
-    X = np.hstack((X1, X2, X3))
+    X = rng.random((n, 3))
 
     # True relationship + noise
     y = 1 * X[:, 0] - X[:, 1] + X[:, 2] + rng.normal(0, 1e-2, size=n)
 
-    # Add noise to data
+    # Add uninformative features
     noise_features = rng.random((n, p_noisy))
     X_with_noise = np.hstack((X, noise_features))
 
-    X_with_noise_scaled, y_scaled, *_ = standardize_data(X_with_noise, y)
-    return X_with_noise_scaled, y_scaled
+    X_scaled = StandardScaler().fit_transform(X_with_noise)
+    y_scaled = StandardScaler().fit_transform(y.reshape(-1, 1)).flatten()
+
+    return X_scaled, y_scaled
 
 
 @pytest.mark.parametrize("n, p_noisy", [[100, 9], [200, 99], [1000, 999]])
