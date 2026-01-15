@@ -52,19 +52,51 @@ exclude = ["docs"]
 
 [tool.ruff.lint]
 select = [
+    "A",
+    "AIR",
     "ASYNC", # flake8-async
     "B",     # flake-8-bugbear
+    "BLE",
+    "C",
     "C4",    # flake8-comprehensions
+    "DJ",
+    "DTZ",
+    "EXE",
     "F",     # pyflakes
+    "FA",
+    "FAST",
+    "FIX",
+    "FLY",
+    "FURB",
+    "G",
     "I",     # isort
     "ICN",   # flake8-import-conventions
+    "INT",
+    "ISC",
+    "LOG",
     "NPY",   # numpy specific rules
+    "PD",
+    "PERF",
+    "PGH",
     "PIE",   # flake8-pie
     "PL",    # pylint
+    "PLC",
+    "PLE",
+    "PLW",
+    "PTH",
+    "PYI",
+    "Q",
+    "RSE",
     "RUF",   # ruff specific rules
     "SIM",   # flake-8-simplify
+    "SLF",
+    "SLOT",
+    "TC",
+    "TD",
+    "TID",
     "UP",    # pyupgrade
     "W",     # pycodestyle
+    "YTT",
 ]
 
 ignore = [
