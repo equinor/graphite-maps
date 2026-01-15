@@ -52,33 +52,33 @@ exclude = ["docs"]
 
 [tool.ruff.lint]
 select = [
-    "W",     # pycodestyle
-    "I",     # isort
-    "B",     # flake-8-bugbear
-    "SIM",   # flake-8-simplify
-    "F",     # pyflakes
-    "PL",    # pylint
-    "NPY",   # numpy specific rules
-    "C4",    # flake8-comprehensions
     "ASYNC", # flake8-async
-    "RUF",   # ruff specific rules
-    "UP",    # pyupgrade
+    "B",     # flake-8-bugbear
+    "C4",    # flake8-comprehensions
+    "F",     # pyflakes
+    "I",     # isort
     "ICN",   # flake8-import-conventions
+    "NPY",   # numpy specific rules
     "PIE",   # flake8-pie
+    "PL",    # pylint
+    "RUF",   # ruff specific rules
+    "SIM",   # flake-8-simplify
+    "UP",    # pyupgrade
+    "W",     # pycodestyle
 ]
 
 ignore = [
-    "PLW2901", # redefined-loop-name
-    "PLR2004", # magic-value-comparison
-    "PLR0915", # too-many-statements
-    "PLR0912", # too-many-branches
-    "PLR0911", # too-many-return-statements
     "PLC2701", # import-private-name
+    "PLR0904", # too-many-public-methods
+    "PLR0911", # too-many-return-statements
+    "PLR0912", # too-many-branches
     "PLR0914", # too-many-locals
+    "PLR0915", # too-many-statements
+    "PLR1702", # too-many-nested-blocks
+    "PLR2004", # magic-value-comparison
     "PLR6301", # no-self-use
     "PLW1641", # eq-without-hash
-    "PLR0904", # too-many-public-methods
-    "PLR1702", # too-many-nested-blocks
+    "PLW2901", # redefined-loop-name
 ]
 
 [tool.ruff.lint.pylint]
