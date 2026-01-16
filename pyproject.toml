@@ -28,7 +28,8 @@ include = ["graphite_maps*"]
 dev = [
     "pre-commit",
     "pytest",
-    "scikit-sparse" # Must be installed with linking towards libsuitesparse
+    "scikit-sparse", # Must be installed with linking towards libsuitesparse
+    "matplotlib_inline"
 ]
 
 [tool.pytest.ini_options]
