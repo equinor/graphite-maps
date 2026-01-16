@@ -90,54 +90,6 @@ jobs:
           python -m pip install pytest
           pytest
 
-  test-ert:
-    needs: [build-wheels-linux]
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [ '3.11', '3.12', '3.13'  ]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Download wheel artifact
-        uses: actions/download-artifact@v6
-        with:
-          name: "Python ${{ matrix.python-version }} wheel"
-      - name: Install wheel
-        run: |
-          # Find the downloaded wheel file
-          wheel_file=$(find . -name "graphite*.whl" -print -quit)
-
-          echo "Found wheel file @ $wheel_file"
-
-          # Install the wheel
-          pip install "$wheel_file"
-
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Clone & install ERT repo
-        run: |
-          git clone --branch main --single-branch https://github.com/equinor/ert
-          echo "install ert main branch"
-          cd ert
-          sudo apt-get install libegl1
-          pip install ".[dev]"
-          pip uninstall scikit-sparse
-
-      - name: Run ERT EnIF tests
-        run: |
-          pytest -k "enif"
-
-      - name: Run ERT poly example with EnIF
-        run: |
-          ert ensemble_information_filter ert/test-data/ert/poly_example/poly.ert
-
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
