@@ -151,7 +151,12 @@ def boost_linear_regression(
         beta_estimate = coef_changes[best_feature]
 
         # adjust to loo estimates for coef_change
-        influence = calculate_influence(X[:, best_feature], residuals, beta_estimate)
+        # Inlined influence: psi / M
+        # where influence = -residuals * x and
+        # M = -mean(x^2) = -1 since x standardized
+        influence = (residuals - beta_estimate * X[:, best_feature]) * X[
+            :, best_feature
+        ]
         beta_estimate_loo = beta_estimate - influence / n_samples
 
         # residuals_full = residuals - beta_estimate * X[:, best_feature]
