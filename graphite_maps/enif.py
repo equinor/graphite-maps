@@ -1,3 +1,5 @@
+from typing import Literal
+
 import networkx as nx
 import numpy as np
 from scipy.sparse import diags, spmatrix
@@ -85,7 +87,7 @@ class EnIF:
         self,
         U: np.ndarray,
         Y: np.ndarray | None = None,
-        learning_algorithm: str | None = "LASSO",
+        learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
         lambda_l2_precision: float = 1.0,
         ordering_method: str = "metis",
         verbose_level: int = 0,
@@ -186,23 +188,25 @@ class EnIF:
         self,
         U: np.ndarray,
         Y: np.ndarray,
-        learning_algorithm: str | None = "LASSO",
+        learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
         verbose_level: int = 0,
     ) -> None:
         """
         Estimate H from data U using (sparse) linear regression
         """
+        if learning_algorithm not in ("LASSO", "influence-boost"):
+            raise ValueError(
+                f"Argument `learning_algorithm` must be 'LASSO' or 'influence-boost'. "
+                f"Got: {learning_algorithm}"
+            )
+
         if learning_algorithm == "LASSO":
             self.H = lr.linear_l1_regression(U, Y, verbose_level=verbose_level - 1)
-        elif learning_algorithm == "influence-boost":
+        else:
             self.H = lr.linear_boost_ic_regression(
                 U, Y, verbose_level=verbose_level - 1
             )
-        else:
-            raise ValueError(
-                f"Argument `learning_algorithm` must be a valid type. "
-                f"Got: {learning_algorithm}"
-            )
+
         self.residual_variance(U, Y, verbose_level=verbose_level - 1)
 
     def pushforward_to_canonical(
