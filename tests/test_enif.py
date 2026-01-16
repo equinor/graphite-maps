@@ -1,15 +1,18 @@
+import networkx as nx
 import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps.enif import EnIF
-from graphite_maps.precision_estimation import precision_to_graph
 
 
-# Simulate data
 def rar1(T, phi, rng=None):
     """simulate auto-regressive-1.
     The first element is simulated from stationary distribution.
     """
+    if phi <= -1 or phi >= 1:
+        raise ValueError(
+            "rar1 requires a stationary AR(1): expected phi in range (-1, 1)"
+        )
     if rng is None:
         rng = np.random.default_rng()
     x = np.empty([T])
@@ -40,15 +43,6 @@ def create_ar1_precision(p, phi):
     return Prec_u
 
 
-def create_ar1_graph(p):
-    # Graph created through precision matrix
-    # Could be created directly
-    phi = 0.3
-    Prec_u = create_ar1_precision(p, phi)
-    Graph_u = precision_to_graph(Prec_u)
-    return Graph_u
-
-
 @pytest.mark.parametrize(
     "n, p, phi", [[100, 1000, 0.5], [200, 100, 0.3], [100, 1000, 0.9]]
 )
@@ -56,14 +50,14 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
     # Sample prior
     U = nrar1(n, p, phi)
 
-    # Create the graph in a very inelegant way (potential for improvement)
-    Graph_u = create_ar1_graph(p)
+    # AR(1) conditional-independence graph: u[i] only depends on its immediate neighbors u[i-1], u[i+1]
+    Graph_u = nx.path_graph(p)
 
     # Specify observations and associate uncertainty, and a linear map H
     d = np.array([30.0])
     sd_eps = 1
-    H = np.array([0] * p, ndmin=2)
-    H[0, np.rint(p / 2).astype(int) - 1] = 1  # middle sencor
+    H = np.zeros((1, p))
+    H[0, p // 2] = 1  # observe the middle component of the state
     H = sp.sparse.csc_matrix(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
     Prec_eps = sp.sparse.csc_matrix(Prec_eps)
@@ -79,8 +73,6 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
     # EnIF low-level API
     gtmap_lowlevel = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
     gtmap_lowlevel.fit_precision(U)
-    if gtmap_lowlevel.H is None:
-        gtmap_lowlevel.fit_H(U, U @ H.T)  # simulations Y = U@H.T
     canonical = gtmap_lowlevel.pushforward_to_canonical(U)
     # Work out residuals and associate unexplained variance
     residual = gtmap_lowlevel.response_residual(U, Y)
@@ -107,8 +99,8 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
     # Specify observations and associate uncertainty, and a linear map H
     d = np.array([30.0])
     sd_eps = 1
-    H = np.array([0] * p, ndmin=2)
-    H[0, np.rint(p / 2).astype(int) - 1] = 1  # middle sencor
+    H = np.zeros((1, p))
+    H[0, p // 2] = 1  # observe the middle component of the state
     H = sp.sparse.csc_matrix(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
     Prec_eps = sp.sparse.csc_matrix(Prec_eps)
@@ -146,8 +138,8 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
 
     # Specify observations and associate uncertainty, and a linear map H
     sd_eps = 1
-    H = np.array([0] * p, ndmin=2)
-    H[0, np.rint(p / 2).astype(int) - 1] = 1  # middle sencor
+    H = np.zeros((1, p))
+    H[0, p // 2] = 1  # observe the middle component of the state
     H = sp.sparse.csc_matrix(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
     Prec_eps = sp.sparse.csc_matrix(Prec_eps)
