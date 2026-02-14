@@ -1,6 +1,11 @@
+import time
+
 import numpy as np
 import pytest
-from graphite_maps.linear_regression import boost_linear_regression
+from graphite_maps.linear_regression import (
+    boost_linear_regression,
+    linear_boost_ic_regression,
+)
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 
@@ -96,3 +101,40 @@ def test_that_mse_decreases_with_more_iterations(n, p_noisy, max_iters):
         assert mse <= prev_mse
 
         prev_mse = mse
+
+
+def test_parallel_speedup():
+    """Test that parallel execution is faster than sequential."""
+    rng = np.random.default_rng(42)
+    # Larger data needed to overcome parallel overhead (~50ms per task)
+    n_samples = 200
+    n_features = 500
+    n_responses = 1000
+
+    U = rng.random((n_samples, n_features))
+    Y = rng.random((n_samples, n_responses))
+
+    # Time sequential execution
+    start = time.perf_counter()
+    H_sequential = linear_boost_ic_regression(U, Y, n_jobs=1)
+    time_sequential = time.perf_counter() - start
+
+    # Time parallel execution
+    start = time.perf_counter()
+    H_parallel = linear_boost_ic_regression(U, Y, n_jobs=-1)
+    time_parallel = time.perf_counter() - start
+
+    # Verify results are identical
+    np.testing.assert_array_almost_equal(
+        H_sequential.toarray(), H_parallel.toarray(), decimal=10
+    )
+
+    # Parallel should be faster on multi-core machines
+    print(f"\nSequential: {time_sequential:.2f}s, Parallel: {time_parallel:.2f}s")
+    print(f"Speedup: {time_sequential / time_parallel:.2f}x")
+
+    # Assert parallel provides speedup (at least 1.2x on multi-core)
+    assert time_parallel < time_sequential, (
+        f"Parallel ({time_parallel:.2f}s) should be faster than "
+        f"sequential ({time_sequential:.2f}s)"
+    )
