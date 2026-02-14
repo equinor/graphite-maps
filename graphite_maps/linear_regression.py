@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
+from joblib import Parallel, delayed
 from scipy.integrate import quad
 from scipy.sparse import spmatrix
 from scipy.stats import chi2
@@ -189,8 +190,22 @@ def boost_linear_regression(
     return coefficients
 
 
+def _fit_single_response_boost(
+    j, U_scaled, Y_scaled, learning_rate, effective_dimension
+):
+    """Fit boosted regression for a single response column."""
+    y_j = Y_scaled[:, j]
+    coefficients_j = boost_linear_regression(
+        U_scaled,
+        y_j,
+        learning_rate=learning_rate,
+        effective_dimension=effective_dimension,
+    )
+    return j, coefficients_j
+
+
 def linear_boost_ic_regression(
-    U, Y, learning_rate=0.5, effective_dimension=None, verbose_level: int = 0
+    U, Y, learning_rate=0.5, effective_dimension=None, verbose_level: int = 0, n_jobs=-1
 ):
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
@@ -207,6 +222,8 @@ def linear_boost_ic_regression(
         2D array of predictors with shape (n, p).
     Y : np.ndarray
         2D array of responses with shape (n, m).
+    n_jobs : int, optional
+        Number of parallel jobs. Use -1 for all CPUs. Default is 1 (sequential).
 
     Returns
     -------
@@ -235,20 +252,17 @@ def linear_boost_ic_regression(
     scaler_y = StandardScaler()
     Y_scaled = scaler_y.fit_transform(Y)
 
-    # Loop over features
-    i_H, j_H, values_H = [], [], []
-    for j in tqdm(range(m), desc="Learning sparse linear map for each response"):
-        y_j = Y_scaled[:, j]
-
-        # Learn individual fit
-        coefficients_j = boost_linear_regression(
-            U_scaled,
-            y_j,
-            learning_rate=learning_rate,
-            effective_dimension=effective_dimension,
+    # Fit responses in parallel
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_fit_single_response_boost)(
+            j, U_scaled, Y_scaled, learning_rate, effective_dimension
         )
+        for j in tqdm(range(m), desc="Learning sparse linear map for each response")
+    )
 
-        # Extract coefficients
+    # Extract coefficients from results
+    i_H, j_H, values_H = [], [], []
+    for j, coefficients_j in results:
         for non_zero_ind in coefficients_j.nonzero()[0]:
             i_H.append(j)
             j_H.append(non_zero_ind)
