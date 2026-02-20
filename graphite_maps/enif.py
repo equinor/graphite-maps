@@ -177,7 +177,6 @@ class EnIF:
         ) = fit_precision_cholesky(
             U,
             self.Graph_u,
-            lambda_l2=lambda_l2,
             verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
         )
