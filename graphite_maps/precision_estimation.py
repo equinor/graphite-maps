@@ -512,7 +512,8 @@ def fit_precision_cholesky_approximate(
             # Add the nodes and edges between them
             G_expanded.add_node(node)
             G_expanded.add_node(neighbor)
-            G_expanded.add_edge(node, neighbor)
+            if neighbor != node:
+                G_expanded.add_edge(node, neighbor)
 
     C = optimize_sparse_affine_kr_map(
         U,
