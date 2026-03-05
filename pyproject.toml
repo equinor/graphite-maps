@@ -12,10 +12,11 @@ description = "Ensemble based data assimilation learning graph informed triangul
 authors = [{name = "Berent Lunde"}]
 requires-python = ">=3.11, <3.15"
 dependencies = [
+    "joblib",
     "matplotlib",
-    "scipy",
-    "scikit-learn",
     "networkx",
+    "scikit-learn",
+    "scipy",
     "tqdm",
 ]
 dynamic = ["version"]
