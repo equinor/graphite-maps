@@ -286,7 +286,7 @@ class EnIF:
         assert self.H is not None, "H must be provided of fitted"
         assert self.Prec_u is not None, "Precision must be provided of fitted"
 
-        n, p = canonical.shape
+        n, _p = canonical.shape
         n_r, m = residual_noisy.shape
         assert n == n_r, "canonical and residual_noisy must have equal samples"
         assert d.shape == (m,), "d and residual_noisy must have matching dimension"
