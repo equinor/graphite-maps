@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, Literal
 
 import networkx as nx
 import numpy as np
@@ -257,11 +257,67 @@ def hessian(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarra
     return H
 
 
+def _solve_row_closed_form(
+    U_reduced: np.ndarray,
+    lambda_l2: float,
+) -> tuple[np.ndarray, float]:
+    """
+    Closed-form minimizer for one row objective.
+
+    This function computes the exact analytic solution for the row-wise objective
+    function, avoiding the need for iterative numerical optimization.
+    For the full mathematical derivation of this closed-form solution,
+    please refer to the README.md file.
+
+    Parameters
+    ----------
+    U_reduced : np.ndarray
+        Reduced data matrix with columns corresponding to non-zero entries
+        in row ``k`` ordered as ``[..., k]``.
+    lambda_l2 : float
+        L2 regularization weight on off-diagonal coefficients.
+
+    Returns
+    -------
+    tuple[np.ndarray, float]
+        Off-diagonal coefficients and positive diagonal coefficient.
+
+    Raises
+    ------
+    ValueError
+        If numerical degeneracy prevents a valid positive diagonal estimate.
+    """
+    n, n_cols = U_reduced.shape
+    z = U_reduced[:, -1]
+
+    if n_cols == 1:
+        alpha = float(np.dot(z, z))
+        if alpha <= 0.0:
+            raise ValueError("Degenerate row: non-positive alpha in closed-form solve")
+        diag_value = np.sqrt(n / alpha)
+        return np.empty(0, dtype=U_reduced.dtype), float(diag_value)
+
+    X = U_reduced[:, :-1]
+    gram = X.T @ X
+    np.fill_diagonal(gram, np.diag(gram) + lambda_l2)
+    rhs = X.T @ z
+
+    beta_tilde = np.linalg.solve(gram, rhs)
+    alpha = float(np.dot(z, z) - np.dot(rhs, beta_tilde))
+    if alpha <= 0.0:
+        raise ValueError("Degenerate row: non-positive alpha in closed-form solve")
+
+    diag_value = np.sqrt(n / alpha)
+    off_diag = -diag_value * beta_tilde
+    return off_diag, float(diag_value)
+
+
 def optimize_sparse_affine_kr_map(
     U: np.ndarray,
     G: nx.Graph,
     lambda_l2: float = 1.0,
     optimization_method: str = "L-BFGS-B",
+    solver: Literal["iterative", "closed_form"] = "iterative",
     verbose_level: int = 0,
     use_tqdm=True,
 ) -> csc_matrix:
@@ -277,6 +333,9 @@ def optimize_sparse_affine_kr_map(
         The graph representing the non-zero structure in C.
     lambda_l2 : float, optional
         The regularization strength for L2 regularization.
+    solver : {"iterative", "closed_form"}, optional
+        Row solver. ``"iterative"`` uses scipy.optimize.minimize and
+        ``"closed_form"`` uses an analytic row-wise solution.
 
     Returns
     -------
@@ -309,20 +368,35 @@ def optimize_sparse_affine_kr_map(
 
         # Optimization for reduced C_k
         lambda_l2_aic = 2.0 * len(non_zero_indices)
-        res = minimize(
-            fun=objective_function,
-            x0=C_k_reduced,
-            args=(U_reduced, lambda_l2_aic),
-            method=optimization_method,
-            jac=gradient,
-            # hess=hessian,
-            tol=1e-12,
-            options={"gtol": 1e-9},
-        )
+        if solver == "iterative":
+            res = minimize(
+                fun=objective_function,
+                x0=C_k_reduced,
+                args=(U_reduced, lambda_l2_aic),
+                method=optimization_method,
+                jac=gradient,
+                # hess=hessian,
+                tol=1e-12,
+                options={"gtol": 1e-9},
+            )
 
-        # Update the full C_k with optimized values
-        C_full[k, non_zero_indices] = res.x
-        C_full[k, k] = np.exp(C_full[k, k])  # res.x learns log diag
+            # Update the full C_k with optimized values
+            C_full[k, non_zero_indices] = res.x
+            C_full[k, k] = np.exp(C_full[k, k])  # res.x learns log diag
+        elif solver == "closed_form":
+            try:
+                off_diag, diag_value = _solve_row_closed_form(
+                    U_reduced=U_reduced,
+                    lambda_l2=lambda_l2_aic,
+                )
+            except ValueError as error:
+                raise ValueError(f"Closed-form solve failed for row {k}") from error
+
+            if len(non_zero_indices) > 1:
+                C_full[k, non_zero_indices[:-1]] = off_diag
+            C_full[k, k] = diag_value
+        else:
+            raise ValueError("solver must be either 'iterative' or 'closed_form'")
 
     # Convert to csc_matrix for efficient storage and arithmetic operations
     return C_full.tocsc()
@@ -333,6 +407,7 @@ def fit_precision_cholesky(
     Graph_u: nx.Graph,
     lambda_l2: float = 1.0,
     ordering_method: str = "metis",
+    solver: Literal["iterative", "closed_form"] = "iterative",
     verbose_level: int = 0,
     use_tqdm=True,
     Graph_C: nx.Graph | None = None,
@@ -374,6 +449,7 @@ def fit_precision_cholesky(
         U_perm,
         Graph_C,
         lambda_l2=lambda_l2,
+        solver=solver,
         verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
@@ -394,6 +470,7 @@ def fit_precision_cholesky_approximate(
     G: nx.Graph,
     neighbourhood_expansion: int = 2,
     optimization_method: str = "L-BFGS-B",
+    solver: Literal["iterative", "closed_form"] = "iterative",
     verbose_level: int = 0,
     use_tqdm=True,
 ) -> csc_matrix:
@@ -441,6 +518,7 @@ def fit_precision_cholesky_approximate(
         U,
         G_expanded,
         optimization_method=optimization_method,
+        solver=solver,
         verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
