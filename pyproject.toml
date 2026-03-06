@@ -29,8 +29,8 @@ include = ["graphite_maps*"]
 dev = [
     "pre-commit",
     "pytest",
-    "scikit-sparse; '.el8.' not in platform_release", # Must be installed with linking towards libsuitesparse
-    "scikit-sparse < 0.5.0; '.el8.' in platform_release"
+    "scikit-sparse; 'el8' not in platform_release", # Must be installed with linking towards libsuitesparse
+    "scikit-sparse < 0.5.0; 'el8' in platform_release"
 ]
 
 [tool.pytest.ini_options]
