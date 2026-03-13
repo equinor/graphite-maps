@@ -138,3 +138,68 @@ def test_parallel_speedup():
         f"Parallel ({time_parallel:.2f}s) should be faster than "
         f"sequential ({time_sequential:.2f}s)"
     )
+
+
+def test_that_rowwise_fitting_requires_independent_features():
+    """With independent rows of X (orthogonal features), training the full
+    map Y=H@X jointly gives the same H as training one row of X at a time.
+    With dependent rows, the maps should differ."""
+    rng = np.random.default_rng(42)
+    n_samples = 1000
+    n_features = 4
+    n_responses = 3
+
+    # --- Independent features via QR, scaled to ~unit variance ---
+    raw = rng.standard_normal((n_samples, n_features))
+    Q, _ = np.linalg.qr(raw)
+    U_indep = Q * np.sqrt(n_samples)
+
+    # True sparse linear map H_true (m x p)
+    H_true = np.array(
+        [
+            [2.0, 0.0, -1.0, 0.0],
+            [0.0, 1.5, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.5],
+        ]
+    )
+    noise = rng.normal(0, 0.01, (n_samples, n_responses))
+    Y_indep = U_indep @ H_true.T + noise
+
+    # Full training (all features at once)
+    H_full = linear_boost_ic_regression(U=U_indep, Y=Y_indep, n_jobs=1)
+
+    # Row-by-row training (one feature / row of X at a time)
+    H_rowwise = np.zeros((n_responses, n_features))
+    for k in range(n_features):
+        H_k = linear_boost_ic_regression(U=U_indep[:, k : k + 1], Y=Y_indep, n_jobs=1)
+        H_rowwise[:, k] = H_k.toarray().flatten()
+
+    # Independent features: full map ≈ row-by-row map
+    np.testing.assert_allclose(
+        H_full.toarray(),
+        H_rowwise,
+        atol=0.1,
+        err_msg="Independent features: full and row-by-row maps should match",
+    )
+
+    # --- Dependent features: make col 1 a near-copy of col 0 ---
+    U_dep = U_indep.copy()
+    U_dep[:, 1] = 0.95 * U_indep[:, 0] + 0.05 * U_indep[:, 1]
+
+    Y_dep = U_dep @ H_true.T + noise
+
+    H_full_dep = linear_boost_ic_regression(U=U_dep, Y=Y_dep, n_jobs=1)
+
+    H_rowwise_dep = np.zeros((n_responses, n_features))
+    for k in range(n_features):
+        H_k = linear_boost_ic_regression(U=U_dep[:, k : k + 1], Y=Y_dep, n_jobs=1)
+        H_rowwise_dep[:, k] = H_k.toarray().flatten()
+
+    # Dependent features: mismatch should be larger than independent case
+    diff_indep = np.max(np.abs(H_full.toarray() - H_rowwise))
+    diff_dep = np.max(np.abs(H_full_dep.toarray() - H_rowwise_dep))
+
+    assert diff_dep > diff_indep, (
+        f"Expected larger mismatch with dependent features "
+        f"(dep={diff_dep:.4f}, indep={diff_indep:.4f})"
+    )
