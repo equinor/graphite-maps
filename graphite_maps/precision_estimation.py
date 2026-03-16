@@ -260,7 +260,6 @@ def hessian(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarra
 def optimize_sparse_affine_kr_map(
     U: np.ndarray,
     G: nx.Graph,
-    lambda_l2: float = 1.0,
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
     use_tqdm=True,
@@ -275,8 +274,6 @@ def optimize_sparse_affine_kr_map(
         The data matrix.
     G : networkx.Graph
         The graph representing the non-zero structure in C.
-    lambda_l2 : float, optional
-        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -331,7 +328,6 @@ def optimize_sparse_affine_kr_map(
 def fit_precision_cholesky(
     U: np.ndarray,
     Graph_u: nx.Graph,
-    lambda_l2: float = 1.0,
     ordering_method: str = "metis",
     verbose_level: int = 0,
     use_tqdm=True,
@@ -349,8 +345,6 @@ def fit_precision_cholesky(
     U : The data matrix.
     Graph_u : The graph representing the non-zero structure in the precision
     matrix.
-    lambda_l2 : float, optional
-        The regularization strength for L2 regularization.
 
     Returns
     -------
@@ -373,7 +367,6 @@ def fit_precision_cholesky(
     C = optimize_sparse_affine_kr_map(
         U_perm,
         Graph_C,
-        lambda_l2=lambda_l2,
         verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
