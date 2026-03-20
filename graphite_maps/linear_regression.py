@@ -30,18 +30,13 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
     H_sparse : scipy.sparse.csc_matrix
         Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
         each response in Y.
-
-    Raises
-    ------
-    AssertionError
-        If the number of samples in U and Y do not match, or if the shape of
-        H_sparse is not (m, p).
     """
     n, p = U.shape  # p: number of features
     n_y, m = Y.shape  # m: number of y responses
 
     # Assert that the first dimension of U and Y are the same
-    assert n == n_y, "Number of samples in U and Y must be the same"
+    if n != n_y:
+        raise ValueError("Number of samples in U and Y must be the same")
 
     if verbose_level > 0:
         print(f"Learning sparse linear map of shape {(m, p)}")
@@ -77,7 +72,6 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
         (np.array(values_H), (np.array(i_H), np.array(j_H))), shape=(m, p)
     )
 
-    # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
     if verbose_level > 0:
@@ -235,18 +229,13 @@ def linear_boost_ic_regression(
     H_sparse : scipy.sparse.csc_matrix
         Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
         each response in Y.
-
-    Raises
-    ------
-    AssertionError
-        If the number of samples in U and Y do not match, or if the shape of
-        H_sparse is not (m, p).
     """
     n, p = U.shape  # p: number of features
     n_y, m = Y.shape  # m: number of y responses
 
     # Assert that the first dimension of U and Y are the same
-    assert n == n_y, "Number of samples in U and Y must be the same"
+    if n != n_y:
+        raise ValueError("Number of samples in U and Y must be the same")
 
     if verbose_level > 0:
         print(f"Learning sparse linear map of shape {(m, p)}")
