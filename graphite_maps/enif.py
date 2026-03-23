@@ -175,8 +175,8 @@ class EnIF:
             self.P_rev,
             self.P_order,
         ) = fit_precision_cholesky(
-            U,
-            self.Graph_u,
+            U=U,
+            Graph_u=self.Graph_u,
             lambda_l2=lambda_l2,
             verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
@@ -401,7 +401,6 @@ class EnIF:
         - update_indices: Array of indices that includes the initial
             predictors and their neighbors up to the specified order.
         """
-
         assert self.H is not None, "H must exist"
         assert self.Prec_u is not None, "Prec_u must exist"
 

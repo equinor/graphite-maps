@@ -13,17 +13,8 @@ from tqdm import tqdm
 
 def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
     """
-    Convert a NetworkX graph to a sparse CSC precision matrix.
-
-    Parameters
-    ----------
-    graph : nx.Graph
-        NetworkX graph representing connections between variables.
-
-    Returns
-    -------
-    scipy.sparse.csc_matrix
-        CSC sparse matrix representing the precision matrix.
+    Convert a NetworkX graph to a sparse CSC precision matrix,
+    setting diagonal to 1.
     """
     prec = nx.to_scipy_sparse_array(graph)
     prec.tolil()
@@ -34,17 +25,6 @@ def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
 def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
     """
     Convert a sparse symmetric precision matrix to a NetworkX graph.
-
-    Parameters
-    ----------
-    precision_matrix : scipy.sparse.csc_matrix
-        CSC sparse matrix representing the precision matrix.
-
-    Returns
-    -------
-    networkx.Graph
-        A NetworkX graph where each edge corresponds to a non-zero element
-        the precision matrix.
     """
     return nx.from_scipy_sparse_array(precision_matrix)
 
