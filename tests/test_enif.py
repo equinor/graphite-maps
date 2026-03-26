@@ -269,6 +269,7 @@ def test_enif_mda_with_fitted_H_and_approximate_precision():
     for alpha, eps_k in zip(alphas, eps_mda, strict=True):
         enif_k = EnIF(Prec_u=Prec_u_current, Prec_eps=alpha * Prec_eps, H=H_fitted)
         enif_k.unexplained_variance = unexplained_var / alpha
+        # enif_k.unexplained_variance = unexplained_var  # No scaling of unexp var
         canonical_k = enif_k.pushforward_to_canonical(U_current)
         residual_noisy_k = residuals + eps_k
         canonical_k = enif_k.update_canonical(canonical_k, residual_noisy_k, d)
