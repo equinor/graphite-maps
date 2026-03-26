@@ -159,3 +159,45 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
 
     # Due to no update, we should have equality
     assert np.allclose(U, U_posterior, atol=1e-12)
+
+
+def test_enif_mda_equals_single_update():
+    """EnIF-MDA with alphas summing to 1 equals a single EnIF update (Gauss-linear)."""
+    n, p, phi = 50, 30, 0.5
+    U = nrar1(n, p, phi)
+    Prec_u = create_ar1_precision(p, phi)
+
+    d = np.array([30.0])
+    H = sp.sparse.csc_matrix(np.eye(1, p, p // 2))
+    Prec_eps = sp.sparse.csc_matrix(np.array([[1.0]]))
+
+    alphas = [0.3, 0.5, 0.2]  # sum = 1
+
+    # Generate independent noise per MDA step, scaled by 1/sqrt(alpha)
+    rng = np.random.default_rng(42)
+    sd = np.sqrt(1.0 / Prec_eps.toarray()[0, 0])
+    z_list = [rng.normal(0, sd, size=(n, 1)) for _ in alphas]
+    eps_mda = [z / np.sqrt(a) for z, a in zip(z_list, alphas, strict=True)]
+
+    # Equivalent single-step noise: eps = sum(alpha_k * eps_k)
+    eps_single = sum(a * e for a, e in zip(alphas, eps_mda, strict=True))
+
+    # --- Single update ---
+    enif = EnIF(Prec_u=Prec_u.copy(), Prec_eps=Prec_eps, H=H)
+    enif.unexplained_variance = np.array([0.0])
+    canonical = enif.pushforward_to_canonical(U)
+    canonical = enif.update_canonical(canonical, eps_single, d)
+    U_single = enif.pullback_from_canonical(canonical, U_prior=U)
+
+    # --- MDA: multiple partial updates ---
+    U_current = U.copy()
+    Prec_u_current = Prec_u.copy()
+    for alpha, eps_k in zip(alphas, eps_mda, strict=True):
+        enif_k = EnIF(Prec_u=Prec_u_current, Prec_eps=alpha * Prec_eps, H=H)
+        enif_k.unexplained_variance = np.array([0.0])
+        canonical_k = enif_k.pushforward_to_canonical(U_current)
+        canonical_k = enif_k.update_canonical(canonical_k, eps_k, d)
+        U_current = enif_k.pullback_from_canonical(canonical_k, U_prior=U_current)
+        Prec_u_current = enif_k.Prec_u
+
+    assert np.allclose(U_single, U_current, atol=1e-10)
