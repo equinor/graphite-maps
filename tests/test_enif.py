@@ -2,7 +2,14 @@ import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps.enif import EnIF
-from graphite_maps.precision_estimation import precision_to_graph
+from graphite_maps.linear_regression import (
+    linear_boost_ic_regression,
+    residual_variance,
+)
+from graphite_maps.precision_estimation import (
+    fit_precision_cholesky_approximate,
+    precision_to_graph,
+)
 
 
 # Simulate data
@@ -159,3 +166,114 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
 
     # Due to no update, we should have equality
     assert np.allclose(U, U_posterior, atol=1e-12)
+
+
+def test_enif_mda_equals_single_update():
+    """EnIF-MDA with alphas summing to 1 equals a single EnIF update (Gauss-linear).
+
+    Uses exact, known parameters (Prec_u from the analytical AR(1) formula,
+    H as a hand-picked row of the identity) with zero unexplained variance.
+    This is a pure algebraic verification of the MDA identity under ideal
+    conditions.
+    """
+    n, p, phi = 50, 30, 0.5
+    U = nrar1(n, p, phi)
+    Prec_u = create_ar1_precision(p, phi)
+
+    d = np.array([30.0])
+    H = sp.sparse.csc_matrix(np.eye(1, p, p // 2))
+    Prec_eps = sp.sparse.csc_matrix(np.array([[1.0]]))
+
+    alphas = [0.3, 0.5, 0.2]  # sum = 1
+
+    # --- Noise control ---
+    rng = np.random.default_rng(42)
+    sd = np.sqrt(1.0 / Prec_eps.toarray()[0, 0])  # measurement std dev
+    z_list = [rng.normal(0, sd, size=(n, 1)) for _ in alphas]  # base noise
+    eps_mda = [z / np.sqrt(a) for z, a in zip(z_list, alphas, strict=True)]  # inflated
+    eps_single = sum(a * e for a, e in zip(alphas, eps_mda, strict=True))  # equivalent
+
+    # --- Single update ---
+    enif = EnIF(Prec_u=Prec_u.copy(), Prec_eps=Prec_eps, H=H)
+    enif.unexplained_variance = np.array([0.0])
+    canonical = enif.pushforward_to_canonical(U)
+    canonical = enif.update_canonical(canonical, eps_single, d)
+    U_single = enif.pullback_from_canonical(canonical, U_prior=U)
+
+    # --- MDA: multiple partial updates ---
+    U_current = U.copy()
+    Prec_u_current = Prec_u.copy()
+    for alpha, eps_k in zip(alphas, eps_mda, strict=True):
+        enif_k = EnIF(Prec_u=Prec_u_current, Prec_eps=alpha * Prec_eps, H=H)
+        enif_k.unexplained_variance = np.array([0.0])
+        canonical_k = enif_k.pushforward_to_canonical(U_current)
+        canonical_k = enif_k.update_canonical(canonical_k, eps_k, d)
+        U_current = enif_k.pullback_from_canonical(canonical_k, U_prior=U_current)
+        Prec_u_current = enif_k.Prec_u
+
+    assert np.allclose(U_single, U_current, atol=1e-10)
+
+
+def test_enif_mda_with_fitted_H_and_approximate_precision():
+    """EnIF-MDA equals single update using fitted H and approximate precision.
+
+    Uses parameters estimated from data (H via linear_boost_ic_regression,
+    Prec_u via fit_precision_cholesky_approximate) with nonzero
+    unexplained_variance from the regression residuals. Verifies the MDA
+    identity holds when using imperfect, data-driven estimates, and that
+    unexplained_variance must also be scaled by 1/alpha in each MDA step.
+    """
+    n, p, phi = 200, 30, 0.5
+    rng = np.random.default_rng(123)
+
+    # --- Generate synthetic data ---
+    U = nrar1(n, p, phi)
+    H_true = sp.sparse.csc_matrix(np.eye(1, p, p // 2))
+    obs_sd = 1.0
+    Y = U @ H_true.T + rng.normal(0, obs_sd, size=(n, 1))
+    d = np.array([30.0])
+    Prec_eps = sp.sparse.csc_matrix(np.array([[1.0 / obs_sd**2]]))
+
+    # --- Fit H using linear_boost_ic_regression ---
+    H_fitted = linear_boost_ic_regression(U, Y)
+    unexplained_var = residual_variance(U, Y, H_fitted)
+
+    # --- Fit Prec_u using fit_precision_cholesky_approximate ---
+    Graph_u = precision_to_graph(create_ar1_precision(p, phi))
+    Prec_u_fitted = fit_precision_cholesky_approximate(U, Graph_u)
+
+    # --- Noise control ---
+    alphas = [0.3, 0.5, 0.2]  # sum = 1
+    noise_rng = np.random.default_rng(99)
+    sd_eps = np.sqrt(1.0 / Prec_eps.toarray()[0, 0])  # measurement std dev
+    z_list = [noise_rng.normal(0, sd_eps, size=(n, 1)) for _ in alphas]  # base noise
+    eps_mda = [z / np.sqrt(a) for z, a in zip(z_list, alphas, strict=True)]  # inflated
+    eps_single = sum(a * e for a, e in zip(alphas, eps_mda, strict=True))  # equivalent
+
+    # Residuals from fitted H
+    residuals = Y - U @ H_fitted.T
+
+    # --- Single update using transport-level steps ---
+    enif = EnIF(Prec_u=Prec_u_fitted.copy(), Prec_eps=Prec_eps, H=H_fitted)
+    enif.unexplained_variance = unexplained_var
+    canonical = enif.pushforward_to_canonical(U)
+    residual_noisy_single = residuals + eps_single
+    canonical = enif.update_canonical(canonical, residual_noisy_single, d)
+    U_single = enif.pullback_from_canonical(canonical, U_prior=U)
+
+    # --- MDA: multiple partial updates ---
+    # Scale both Prec_eps and unexplained_variance so that the total residual
+    # covariance inflates by 1/alpha_k:  (unexp_var + eps_var) / alpha_k
+    U_current = U.copy()
+    Prec_u_current = Prec_u_fitted.copy()
+    for alpha, eps_k in zip(alphas, eps_mda, strict=True):
+        enif_k = EnIF(Prec_u=Prec_u_current, Prec_eps=alpha * Prec_eps, H=H_fitted)
+        enif_k.unexplained_variance = unexplained_var / alpha
+        # enif_k.unexplained_variance = unexplained_var  # No scaling of unexp var
+        canonical_k = enif_k.pushforward_to_canonical(U_current)
+        residual_noisy_k = residuals + eps_k
+        canonical_k = enif_k.update_canonical(canonical_k, residual_noisy_k, d)
+        U_current = enif_k.pullback_from_canonical(canonical_k, U_prior=U_current)
+        Prec_u_current = enif_k.Prec_u
+
+    assert np.allclose(U_single, U_current, atol=1e-10)
