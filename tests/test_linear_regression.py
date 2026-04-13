@@ -3,6 +3,7 @@ import time
 import numpy as np
 import pytest
 from graphite_maps.linear_regression import (
+    _fit_single_response_boost,
     boost_linear_regression,
     linear_boost_ic_regression,
 )
@@ -192,3 +193,20 @@ def test_that_rowwise_fitting_requires_independent_features():
         f"Expected larger mismatch with dependent features "
         f"(dep={diff_dep:.4f}, indep={diff_indep:.4f})"
     )
+
+
+def test_single_response_returns_sparse_representation():
+    """_fit_single_response_boost must return (j, nonzero_indices, nonzero_values),
+    not a full dense coefficient vector."""
+    rng = np.random.default_rng(42)
+    n, p = 50, 100
+    U_scaled = rng.standard_normal((n, p))
+    y_j = rng.standard_normal(n)
+
+    j = 0
+    col_idx, nonzero_indices, nonzero_values = _fit_single_response_boost(
+        j, U_scaled, y_j, learning_rate=0.5, effective_dimension=None
+    )
+    assert col_idx == j
+    assert nonzero_indices.shape == nonzero_values.shape
+    assert nonzero_values.size < p
