@@ -27,10 +27,13 @@ include = ["graphite_maps*"]
 
 [project.optional-dependencies]
 dev = [
+    "mypy",
     "pre-commit",
     "pytest",
     "scikit-sparse; 'el8' not in platform_release", # Must be installed with linking towards libsuitesparse
-    "scikit-sparse < 0.5.0; 'el8' in platform_release"
+    "scikit-sparse < 0.5.0; 'el8' in platform_release",
+    "types-networkx",
+    "types-tqdm",
 ]
 
 [tool.pytest.ini_options]
@@ -45,6 +48,14 @@ files = "graphite_maps"
 python_version = 3.14
 show_error_codes = true
 pretty = true
+
+[[tool.mypy.overrides]]
+module = [
+    "scipy.*",
+    "sksparse.*",
+    "joblib",
+    "sklearn.*",
+]
 ignore_missing_imports = true
 
 [tool.ruff]
@@ -56,6 +67,7 @@ exclude = ["docs"]
 select = [
     "A",
     "AIR",
+    "ANN",
     "ASYNC", # flake8-async
     "B",     # flake-8-bugbear
     "BLE",
@@ -113,6 +125,11 @@ ignore = [
     "PLR6301", # no-self-use
     "PLW1641", # eq-without-hash
     "PLW2901", # redefined-loop-name
+]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*" = [
+    "ANN",
 ]
 
 [tool.ruff.lint.pylint]
