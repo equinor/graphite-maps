@@ -1,5 +1,4 @@
 import time
-from typing import Any
 
 import networkx as nx
 import numpy as np
@@ -29,7 +28,7 @@ def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
     return nx.from_scipy_sparse_array(precision_matrix)
 
 
-def gershgorin_spd_adjustment(prec):
+def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
     """
     Performs Gershgorin-style diagonal adjustment on the input symmetric
     sparse matrix `prec` and returns the adjusted matrix. The adjustment is
@@ -56,7 +55,7 @@ def gershgorin_spd_adjustment(prec):
 
 def find_sparsity_structure_from_chol(
     chol_LLT: csc_matrix,
-) -> tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
     L = chol_LLT.L()
     p = L.shape[0]
 
@@ -95,7 +94,7 @@ def find_sparsity_structure_from_graph(
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
     verbose_level: int = 0,
-) -> tuple[nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
     """
     Finds sparsity structure for lower triangular C so that CTC = LLT = PTAP.
     The permutation P is optimized and returned, so is the non-zero structure
@@ -111,7 +110,7 @@ def find_sparsity_structure_from_graph(
     -------
     Graph_C : nx.Graph
         The graph representing the non-zero structure in C.
-    perm_compose : NDArray[signedinteger[Any]]
+    perm_compose : NDArray[np.integer]
         The composed permutation array.
     P_rev : scipy.sparse.csc_matrix
         The reverse permutation matrix.
@@ -153,7 +152,9 @@ def find_sparsity_structure_from_graph(
     return Graph_C, perm_compose, P_rev, P_order
 
 
-def objective_function(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> float:
+def objective_function(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> float:
     """
     Objective function for optimizing the affine KR map with standard Gaussian
     reference and l2 regularized dependence.
@@ -180,7 +181,9 @@ def objective_function(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -
     return 0.5 * np.sum(Su**2) - n * np.log(abs(C_k[-1])) + regularization_l2
 
 
-def gradient(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarray:
+def gradient(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> NDArray[np.floating]:
     """
     Gradient of the objective function.
 
@@ -209,7 +212,9 @@ def gradient(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarr
     return grad
 
 
-def hessian(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarray:
+def hessian(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> NDArray[np.floating]:
     """
     Hessian `objective_function`.
 
@@ -238,11 +243,11 @@ def hessian(C_k: np.ndarray, U: np.ndarray, lambda_l2: float = 1.0) -> np.ndarra
 
 
 def optimize_sparse_affine_kr_map(
-    U: np.ndarray,
+    U: NDArray[np.floating],
     G: nx.Graph,
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
-    use_tqdm=True,
+    use_tqdm: bool = True,
 ) -> csc_matrix:
     """
     Optimizing the affine KR map with standard Gaussian reference  and l2
@@ -306,16 +311,16 @@ def optimize_sparse_affine_kr_map(
 
 
 def fit_precision_cholesky(
-    U: np.ndarray,
+    U: NDArray[np.floating],
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
     verbose_level: int = 0,
-    use_tqdm=True,
+    use_tqdm: bool = True,
     Graph_C: nx.Graph | None = None,
-    perm_compose: np.ndarray | None = None,
+    perm_compose: NDArray[np.integer] | None = None,
     P_rev: csc_matrix | None = None,
     P_order: csc_matrix | None = None,
-) -> tuple[csc_matrix, nx.Graph, NDArray[Any], csc_matrix, csc_matrix]:
+) -> tuple[csc_matrix, nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
     """
     Estimate the precision matrix using Cholesky decomposition.
     An l2-regularized negative log-likelihood is minimized.
@@ -363,12 +368,12 @@ def fit_precision_cholesky(
 
 
 def fit_precision_cholesky_approximate(
-    U: np.ndarray,
+    U: NDArray[np.floating],
     G: nx.Graph,
     neighbourhood_expansion: int = 2,
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
-    use_tqdm=True,
+    use_tqdm: bool = True,
 ) -> csc_matrix:
     """
     Estimate the precision matrix using approximate Cholesky.
@@ -397,7 +402,7 @@ def fit_precision_cholesky_approximate(
     """
 
     # Assuming Graph_u already exists
-    G_expanded = nx.Graph()
+    G_expanded: nx.Graph = nx.Graph()
 
     for node in G.nodes():
         hops = nx.single_source_shortest_path_length(

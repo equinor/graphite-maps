@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 from joblib import Parallel, delayed
+from numpy.typing import NDArray
 from scipy.integrate import quad
 from scipy.sparse import spmatrix
 from scipy.stats import chi2
@@ -9,7 +10,9 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 
-def linear_l1_regression(U, Y, verbose_level: int = 0):
+def linear_l1_regression(
+    U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
+) -> sp.csc_matrix:
     """Performs LASSO regression for each response in Y against predictors in
     U, constructing a sparse matrix of regression coefficients.
 
@@ -84,21 +87,23 @@ def linear_l1_regression(U, Y, verbose_level: int = 0):
     return H_sparse
 
 
-def expected_max_chisq(p):
+def expected_max_chisq(p: int) -> float:
     """Expected maximum of p central chi-square(1) random variables."""
 
-    def dmaxchisq(x):
+    def dmaxchisq(x: float) -> float:
         return 1.0 - np.exp(p * chi2.logcdf(x, df=1))
 
     expectation, _ = quad(dmaxchisq, 0, np.inf)
     return expectation
 
 
-def mse(residuals):
+def mse(residuals: NDArray[np.floating]) -> float:
     return 0.5 * np.mean(residuals**2)
 
 
-def calculate_psi_M(x, y, beta_estimate):
+def calculate_psi_M(
+    x: NDArray[np.floating], y: NDArray[np.floating], beta_estimate: float
+) -> tuple[NDArray[np.floating], float]:
     """The psi/score function for mse: 0.5*residual**2."""
     residuals = y - beta_estimate * x
     psi = -residuals * x
@@ -106,15 +111,22 @@ def calculate_psi_M(x, y, beta_estimate):
     return psi, M
 
 
-def calculate_influence(x, y, beta_estimate):
+def calculate_influence(
+    x: NDArray[np.floating], y: NDArray[np.floating], beta_estimate: float
+) -> NDArray[np.floating]:
     """The influence of (x, y) on beta_estimate as an mse M-estimator."""
     psi, M = calculate_psi_M(x, y, beta_estimate)
     return psi / M
 
 
 def boost_linear_regression(
-    X, y, learning_rate=0.5, tol=1e-6, max_iter=10000, effective_dimension=None
-):
+    X: NDArray[np.floating],
+    y: NDArray[np.floating],
+    learning_rate: float = 0.5,
+    tol: float = 1e-6,
+    max_iter: int = 10000,
+    effective_dimension: int | None = None,
+) -> NDArray[np.floating]:
     """Boost coefficients of linearly regressing y on standardized X.
 
     The coefficient selection utilizes information theoretic weighting. The
@@ -190,8 +202,12 @@ def boost_linear_regression(
 
 
 def _fit_single_response_boost(
-    j, U_scaled, Y_scaled, learning_rate, effective_dimension
-):
+    j: int,
+    U_scaled: NDArray[np.floating],
+    Y_scaled: NDArray[np.floating],
+    learning_rate: float,
+    effective_dimension: int | None,
+) -> tuple[int, NDArray[np.floating]]:
     """Fit boosted regression for a single response column."""
     y_j = Y_scaled[:, j]
     coefficients_j = boost_linear_regression(
@@ -204,8 +220,13 @@ def _fit_single_response_boost(
 
 
 def linear_boost_ic_regression(
-    U, Y, learning_rate=0.5, effective_dimension=None, verbose_level: int = 0, n_jobs=-1
-):
+    U: NDArray[np.floating],
+    Y: NDArray[np.floating],
+    learning_rate: float = 0.5,
+    effective_dimension: int | None = None,
+    verbose_level: int = 0,
+    n_jobs: int = -1,
+) -> sp.csc_matrix:
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
     The complexity is tuned with an information theoretic approach.
@@ -284,8 +305,11 @@ def linear_boost_ic_regression(
 
 
 def response_residual(
-    U: np.ndarray, Y: np.ndarray, H: spmatrix, verbose_level: int = 0
-) -> np.ndarray:
+    U: NDArray[np.floating],
+    Y: NDArray[np.floating],
+    H: spmatrix,
+    verbose_level: int = 0,
+) -> NDArray[np.floating]:
     """Residual from regression H for Y on U"""
     n_u, p = U.shape
     n_y, m = Y.shape
@@ -299,8 +323,11 @@ def response_residual(
 
 
 def residual_variance(
-    U: np.ndarray, Y: np.ndarray, H: spmatrix, verbose_level: int = 0
-) -> np.ndarray:
+    U: NDArray[np.floating],
+    Y: NDArray[np.floating],
+    H: spmatrix,
+    verbose_level: int = 0,
+) -> NDArray[np.floating]:
     """Variance in Y not explained by U through H"""
 
     n_u, p = U.shape

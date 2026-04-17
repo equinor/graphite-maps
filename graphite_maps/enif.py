@@ -2,6 +2,7 @@ from typing import Literal
 
 import networkx as nx
 import numpy as np
+from numpy.typing import NDArray
 from scipy.sparse import diags, spmatrix
 from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
@@ -16,7 +17,7 @@ from .precision_estimation import (
 
 def generate_gaussian_noise(
     n: int, Prec: spmatrix, seed: int | None = None, verbose_level: int = 0
-) -> np.ndarray:
+) -> NDArray[np.floating]:
     """
     Generates 'n' samples of Gaussian noise with precision 'Prec'.
 
@@ -75,18 +76,18 @@ class EnIF:
         self.Graph_u = Graph_u
         self.Prec_eps = Prec_eps
         self.H = H
-        self.unexplained_variance: np.ndarray | None = None
+        self.unexplained_variance: NDArray[np.floating] | None = None
 
         # Convenience for re-use of cholesky and ordering
         self.Graph_C: nx.Graph | None = None
-        self.perm_compose: np.ndarray | None = None
+        self.perm_compose: NDArray[np.integer] | None = None
         self.P_rev: spmatrix | None = None
         self.P_order: spmatrix | None = None
 
     def fit(
         self,
-        U: np.ndarray,
-        Y: np.ndarray | None = None,
+        U: NDArray[np.floating],
+        Y: NDArray[np.floating] | None = None,
         learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
         ordering_method: str = "metis",
         verbose_level: int = 0,
@@ -116,14 +117,14 @@ class EnIF:
 
     def transport(
         self,
-        U: np.ndarray,
-        Y: np.ndarray,
-        d: np.ndarray,
-        update_indices: np.ndarray | None = None,
+        U: NDArray[np.floating],
+        Y: NDArray[np.floating],
+        d: NDArray[np.floating],
+        update_indices: NDArray[np.integer] | None = None,
         seed: int | None = None,
         iterative: bool = False,
         verbose_level: int = 0,
-    ) -> np.ndarray:
+    ) -> NDArray[np.floating]:
         """
         Transport U from a sample from the prior to the posterior
         """
@@ -160,13 +161,14 @@ class EnIF:
     # Low-level API methods
     def fit_precision(
         self,
-        U: np.ndarray,
+        U: NDArray[np.floating],
         ordering_method: str = "metis",
         verbose_level: int = 0,
     ) -> None:
         """
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
         """
+        assert self.Graph_u is not None, "Graph_u must be set to fit precision"
         (
             self.Prec_u,
             self.Graph_C,
@@ -182,8 +184,8 @@ class EnIF:
 
     def fit_H(
         self,
-        U: np.ndarray,
-        Y: np.ndarray,
+        U: NDArray[np.floating],
+        Y: NDArray[np.floating],
         learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
         verbose_level: int = 0,
     ) -> None:
@@ -206,8 +208,8 @@ class EnIF:
         self.residual_variance(U, Y, verbose_level=verbose_level - 1)
 
     def pushforward_to_canonical(
-        self, U: np.ndarray, verbose_level: int = 0
-    ) -> np.ndarray:
+        self, U: NDArray[np.floating], verbose_level: int = 0
+    ) -> NDArray[np.floating]:
         """
         Map each realization u in U to canonical space eta = Prec * u
         """
@@ -240,8 +242,8 @@ class EnIF:
         return Prec_r
 
     def response_residual(
-        self, U: np.ndarray, Y: np.ndarray, verbose_level: int = 0
-    ) -> np.ndarray:
+        self, U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
+    ) -> NDArray[np.floating]:
         """Residual from regression self.H for Y on U"""
         if self.H is None:
             raise ValueError("H is not set.")
@@ -251,7 +253,7 @@ class EnIF:
         return lr.response_residual(U, Y, self.H, verbose_level=verbose_level - 1)
 
     def residual_variance(
-        self, U: np.ndarray, Y: np.ndarray, verbose_level: int = 0
+        self, U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
     ) -> None:
         """Sets self.unexplained_variance from variance on residuals"""
         if self.H is None:
@@ -263,7 +265,7 @@ class EnIF:
 
     def generate_observation_noise(
         self, n: int, seed: int | None = None, verbose_level: int = 0
-    ) -> np.ndarray:
+    ) -> NDArray[np.floating]:
         """Sample n realizations of observation noise."""
         if n < 1:
             raise ValueError(f"`n` should be g.e. 1, got {n}")
@@ -274,11 +276,11 @@ class EnIF:
 
     def update_canonical(
         self,
-        canonical: np.ndarray,
-        residual_noisy: np.ndarray,
-        d: np.ndarray,
+        canonical: NDArray[np.floating],
+        residual_noisy: NDArray[np.floating],
+        d: NDArray[np.floating],
         verbose_level: int = 0,
-    ) -> np.ndarray:
+    ) -> NDArray[np.floating]:
         """
         Use information-filter equations to update (eta, Prec) using perturbed
         d
@@ -320,12 +322,12 @@ class EnIF:
 
     def pullback_from_canonical(
         self,
-        updated_canonical: np.ndarray,
-        update_indices: np.ndarray | None = None,
-        U_prior: np.ndarray | None = None,
+        updated_canonical: NDArray[np.floating],
+        update_indices: NDArray[np.integer] | None = None,
+        U_prior: NDArray[np.floating] | None = None,
         iterative: bool = False,
         verbose_level: int = 0,
-    ) -> np.ndarray:
+    ) -> NDArray[np.floating]:
         """
         Solve u = Prec * eta using selective updates for specified indices,
         taking into account previously calculated values of U_prior where
@@ -346,6 +348,7 @@ class EnIF:
         assert update_indices is not None
         unchanged_indices = np.setdiff1d(all_indices, update_indices)
 
+        updated_moment: NDArray[np.floating]
         if U_prior is None:
             updated_moment = np.zeros(updated_canonical.shape)
         else:
@@ -388,9 +391,9 @@ class EnIF:
 
     def get_update_indices(
         self,
-        neighbor_propagation_order=10,
+        neighbor_propagation_order: int = 10,
         verbose_level: int = 0,
-    ):
+    ) -> NDArray[np.integer]:
         """
         Determine indices to update based on the order of neighbor propagation.
 
@@ -431,10 +434,10 @@ class EnIF:
                 f"{adjacency.shape[0]}"
             )
 
-        return np.array(list(all_nodes))
+        return np.array(list(all_nodes), dtype=int)
 
     @property
-    def C_structure_exists(self):
+    def C_structure_exists(self) -> bool:
         """Check if information from permuted Cholesky decomposition exists"""
         return not (
             self.Graph_C is None
