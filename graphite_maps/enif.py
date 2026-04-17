@@ -88,7 +88,6 @@ class EnIF:
         U: np.ndarray,
         Y: np.ndarray | None = None,
         learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
-        lambda_l2_precision: float = 1.0,
         ordering_method: str = "metis",
         verbose_level: int = 0,
     ) -> None:
@@ -99,7 +98,6 @@ class EnIF:
         if self.Prec_u is None:
             self.fit_precision(
                 U,
-                lambda_l2_precision,
                 verbose_level=verbose_level - 1,
                 ordering_method=ordering_method,
             )
@@ -163,7 +161,6 @@ class EnIF:
     def fit_precision(
         self,
         U: np.ndarray,
-        lambda_l2: float = 1.0,
         ordering_method: str = "metis",
         verbose_level: int = 0,
     ) -> None:
@@ -179,7 +176,6 @@ class EnIF:
         ) = fit_precision_cholesky(
             U=U,
             Graph_u=self.Graph_u,
-            lambda_l2=lambda_l2,
             verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
         )
