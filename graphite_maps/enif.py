@@ -60,6 +60,24 @@ def generate_gaussian_noise(
 
 
 class EnIF:
+    """
+    Initialize an Ensemble Information Filter (EnIF).
+
+    Parameters
+    ----------
+    Prec_u : spmatrix | None, optional
+        Precision matrix for state vector u (parameters).
+        The default is None.
+    Graph_u : nx.Graph | None, optional
+        Graph representing non-zero structure in Prec_u.
+        The default is None.
+    Prec_eps : spmatrix | None
+        Precision of the observation noise epsilon.
+    H : spmatrix | None, optional
+        Mapping from state vector u (parameters) to reponses y.
+        The default is None.
+    """
+
     def __init__(
         self,
         *,
