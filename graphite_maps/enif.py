@@ -8,8 +8,8 @@ from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
-from . import linear_regression as lr
-from .precision_estimation import (
+from graphite_maps import linear_regression as lr
+from graphite_maps.precision_estimation import (
     find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
