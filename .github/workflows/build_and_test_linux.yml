@@ -89,6 +89,7 @@ jobs:
         run: |
           python -m pip install pytest
           pytest
+          pytest graphite_maps --doctest-modules
 
   publish:
     name: Publish to PyPI

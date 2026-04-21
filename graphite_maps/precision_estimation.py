@@ -43,6 +43,19 @@ def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
     -------
     scipy.sparse.csc_matrix
         The SPD matrix after Gershgorin-style diagonal adjustment.
+
+
+    Examples
+    --------
+    >>> prec = np.array([[2. , 1.1, 0.4, 0.2],
+    ...                  [1.1, 1.6, 0.6, 1.2],
+    ...                  [0.4, 0.6, 0.8, 1.2],
+    ...                  [0.2, 1.2, 1.2, 0.4]])
+    >>> gershgorin_spd_adjustment(sp.csc_array(prec)).todense()
+    array([[2. , 1.1, 0.4, 0.2],
+           [1.1, 3. , 0.6, 1.2],
+           [0.4, 0.6, 2.3, 1.2],
+           [0.2, 1.2, 1.2, 2.7]])
     """
     prec = prec.copy().tocsc()
     eps = 1e-1
@@ -427,3 +440,9 @@ def fit_precision_cholesky_approximate(
     Prec_approx = C.T @ C
 
     return Prec_approx
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])

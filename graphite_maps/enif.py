@@ -8,8 +8,8 @@ from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
-from . import linear_regression as lr
-from .precision_estimation import (
+from graphite_maps import linear_regression as lr
+from graphite_maps.precision_estimation import (
     find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
@@ -457,3 +457,9 @@ class EnIF:
             or self.P_rev is None
             or self.P_order is None
         )
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])

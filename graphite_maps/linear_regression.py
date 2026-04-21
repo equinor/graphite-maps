@@ -346,3 +346,9 @@ def residual_variance(
         print("Calculating unexplained variance")
 
     return unexplained_variance
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])
