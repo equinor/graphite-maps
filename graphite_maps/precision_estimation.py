@@ -427,3 +427,8 @@ def fit_precision_cholesky_approximate(
     Prec_approx = C.T @ C
 
     return Prec_approx
+
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])

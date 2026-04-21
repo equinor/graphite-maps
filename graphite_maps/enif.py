@@ -464,3 +464,8 @@ class EnIF:
             or self.P_rev is None
             or self.P_order is None
         )
+    
+    
+if __name__ == "__main__":
+    import pytest
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])
