@@ -249,9 +249,8 @@ def optimize_sparse_affine_kr_map(
     verbose_level: int = 0,
     use_tqdm: bool = True,
 ) -> csc_matrix:
-    """
-    Optimizing the affine KR map with standard Gaussian reference  and l2
-    regularized dependence.
+    """Optimize the affine Knothe-Rosenblatt (KR) map with standard Gaussian
+    reference and l2-regularized dependence.
 
     Parameters
     ----------
@@ -362,7 +361,7 @@ def fit_precision_cholesky(
         prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
         print(f"Precision has log-determinant: {prec_logdet}")
 
-    # 3. Unwrap C to yield precision
+    # 3. Unwrap C to yield precision (Eqn 73 in paper)
     Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
     return Prec, Graph_C, perm_compose, P_rev, P_order
 

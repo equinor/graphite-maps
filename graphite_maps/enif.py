@@ -302,10 +302,11 @@ class EnIF:
         Prec_r = self.Prec_residual_noisy(verbose_level=verbose_level - 1)
         for i in range(n):
             d_adjusted = d - residual_noisy[i, :]
+            # Eqn (46) from the paper
             updated_canonical[i, :] += self.H.T @ Prec_r @ d_adjusted
 
         # posterior precision
-        self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H
+        self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
         # Only print this if one really wants it. The cholesky can be heavy
         if verbose_level > 5:
