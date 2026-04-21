@@ -79,7 +79,7 @@ def find_sparsity_structure_from_chol(
     # Extract the lower triangular Cholesky factor
     L = chol_LLT.L()
 
-    # Create matrix of non-zeroes equalling C: LLT=CTC unique when SPD
+    # Create matrix of non-zeroes equalling C: L @ L.T=C.T @ C unique when SPD
     C_pattern = (P_rev @ L @ P_rev).T
 
     # Extract structure into a graph for C
@@ -96,7 +96,9 @@ def find_sparsity_structure_from_graph(
     verbose_level: int = 0,
 ) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
     """
-    Finds sparsity structure for lower triangular C so that CTC = LLT = PTAP.
+    Finds sparsity structure for lower triangular C so that
+      C.T @ C = L @ L.T = P.T @ A @ P.
+
     The permutation P is optimized and returned, so is the non-zero structure
     of C. For convenience the permutation so that data for A can be arranged
     according to C is also returned.
@@ -132,11 +134,11 @@ def find_sparsity_structure_from_graph(
     SPD_Prec = sp.csc_matrix(SPD_Prec)
 
     # PT prec P = LLT
-    start = time.time()
+    start = time.perf_counter()
     chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
-    end = time.time()
+    end = time.perf_counter()
     if verbose_level > 0:
-        print(f"Permutation optimization took {end - start} seconds")
+        print(f"Permutation optimization took {end - start:.2f} seconds")
 
     Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_chol(
         chol_LLT=chol_LLT
@@ -249,9 +251,8 @@ def optimize_sparse_affine_kr_map(
     verbose_level: int = 0,
     use_tqdm: bool = True,
 ) -> csc_matrix:
-    """
-    Optimizing the affine KR map with standard Gaussian reference  and l2
-    regularized dependence.
+    """Optimize the affine Knothe-Rosenblatt (KR) map with standard Gaussian
+    reference and l2-regularized dependence.
 
     Parameters
     ----------
@@ -350,8 +351,8 @@ def fit_precision_cholesky(
     # 2. Estimate non-zeroes of C
     U_perm = U[:, perm_compose]
     C = optimize_sparse_affine_kr_map(
-        U_perm,
-        Graph_C,
+        U=U_perm,
+        G=Graph_C,
         verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
@@ -362,7 +363,7 @@ def fit_precision_cholesky(
         prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
         print(f"Precision has log-determinant: {prec_logdet}")
 
-    # 3. Unwrap C to yield precision
+    # 3. Unwrap C to yield precision (Eqn 73 in paper)
     Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
     return Prec, Graph_C, perm_compose, P_rev, P_order
 
@@ -416,8 +417,8 @@ def fit_precision_cholesky_approximate(
             G_expanded.add_edge(node, neighbor)
 
     C = optimize_sparse_affine_kr_map(
-        U,
-        G_expanded,
+        U=U,
+        G=G_expanded,
         optimization_method=optimization_method,
         verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
