@@ -45,11 +45,13 @@ def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
         The SPD matrix after Gershgorin-style diagonal adjustment.
     """
     prec = prec.copy().tocsc()
-    eps = 1e-1
-    offdiag_abs_sum = np.asarray(np.abs(prec).sum(axis=1)).ravel() - prec.diagonal()
-    for i in range(prec.shape[0]):
-        if offdiag_abs_sum[i] >= prec[i, i]:
-            prec[i, i] = offdiag_abs_sum[i] + eps
+    eps = 1e-1  # Consider using np.finfo(np.float64).eps**0.5 ?
+
+    diagonal = prec.diagonal()
+    offdiag_abs_sum = np.asarray(np.abs(prec).sum(axis=1)).ravel() - diagonal
+
+    new_diag = np.maximum(offdiag_abs_sum + eps, diagonal)
+    prec.setdiag(new_diag)
     return prec
 
 
