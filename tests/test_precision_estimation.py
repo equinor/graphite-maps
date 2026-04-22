@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import scipy as sp
 from graphite_maps import precision_estimation as precest
 from scipy.linalg import det
 from scipy.sparse import csc_array, diags
@@ -15,6 +16,28 @@ def test_gershgorin_spd_adjustment_on_random_matrices(seed):
 
     prec_posdef = precest.gershgorin_spd_adjustment(csc_array(prec)).todense()
     assert np.min(np.linalg.eigvals(prec_posdef)) > 0
+
+
+def test_objective_twice():
+    # A regression test: ensure that two calls return the same result.
+    rng = np.random.default_rng(42)
+
+    C_k = np.exp(rng.normal(0, 0.1, size=5))
+    U = rng.normal(size=(5, 5))
+
+    value1 = precest.objective_function(C_k, U)
+    value2 = precest.objective_function(C_k, U)
+    np.testing.assert_allclose(value1, value2)
+
+    # Check gradient
+    rmse = sp.optimize.check_grad(
+        precest.objective_function,
+        precest.gradient,
+        np.array([1, 2, 3, 4, 4.5]),
+        U,
+        rng=rng,
+    )
+    assert rmse <= 0.002
 
 
 def test_precision_graph_conversion():
