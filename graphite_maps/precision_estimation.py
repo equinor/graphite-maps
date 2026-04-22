@@ -189,6 +189,8 @@ def objective_function(
     float
         The value of `objective_function`.
     """
+    C_k = C_k.copy()
+
     C_k[-1] = np.exp(C_k[-1])
     Su = U.dot(C_k)
     n, _ = U.shape
@@ -217,6 +219,8 @@ def gradient(
     np.ndarray
         The gradient of the objective function.
     """
+    C_k = C_k.copy()
+
     n, _ = U.shape
     C_k[-1] = np.exp(C_k[-1])
     prediction = U.dot(C_k)
@@ -248,6 +252,8 @@ def hessian(
     np.ndarray
         The Hessian of the objective function.
     """
+    C_k = C_k.copy()
+
     n, _ = U.shape
     H = U.T.dot(U)
     np.fill_diagonal(H[:-1, :-1], H.diagonal()[:-1] + lambda_l2)  # L2-term
