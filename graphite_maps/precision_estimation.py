@@ -15,10 +15,9 @@ def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
     Convert a NetworkX graph to a sparse CSC precision matrix,
     setting diagonal to 1.
     """
-    prec = nx.to_scipy_sparse_array(graph)
-    prec.tolil()
+    prec = nx.to_scipy_sparse_array(graph, format="csc")
     prec.setdiag(1)
-    return prec.tocsc()
+    return prec
 
 
 def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
