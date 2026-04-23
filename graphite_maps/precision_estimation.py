@@ -6,7 +6,7 @@ import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.sparse import csc_matrix, tril
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import Factor, cholesky
 from tqdm import tqdm
 
 
@@ -67,7 +67,7 @@ def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
 
 
 def find_sparsity_structure_from_chol(
-    chol_LLT: csc_matrix,
+    chol_LLT: Factor,
 ) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
     L = chol_LLT.L()
     p = L.shape[0]
