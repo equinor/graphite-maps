@@ -134,28 +134,25 @@ def find_sparsity_structure_from_graph(
     Examples
     --------
     >>> import networkx as nx
-    >>> Graph_u = nx.random_geometric_graph(n=5, radius=0.5, seed=42)
+    >>> Graph_u = nx.Graph([(0, 1), (0, 3), (0, 4), (1, 4), (3, 4)])
     >>> Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(Graph_u)
     >>> nx.to_scipy_sparse_array(Graph_C).todense().round(1)
-    array([[ 0. , -0.2,  0.4,  0.5,  0. ],
-           [-0.2,  0. ,  0.4,  0.5,  0. ],
-           [ 0.4,  0.4,  0. ,  0.5,  0. ],
-           [ 0.5,  0.5,  0.5,  0. ,  0. ],
-           [ 0. ,  0. ,  0. ,  0. ,  0. ]])
+    array([[0. , 0.3, 0.5, 0.5],
+           [0.3, 0. , 0.5, 0.5],
+           [0.5, 0.5, 0. , 0. ],
+           [0.5, 0.5, 0. , 0. ]])
     >>> perm_compose
-    array([1, 3, 4, 0, 2])
+    array([3, 0, 1, 2])
     >>> P_rev.todense()
-    matrix([[0., 0., 0., 0., 1.],
-            [0., 0., 0., 1., 0.],
-            [0., 0., 1., 0., 0.],
-            [0., 1., 0., 0., 0.],
-            [1., 0., 0., 0., 0.]])
+    matrix([[0., 0., 0., 1.],
+            [0., 0., 1., 0.],
+            [0., 1., 0., 0.],
+            [1., 0., 0., 0.]])
     >>> P_order.todense()
-    matrix([[0., 1., 0., 0., 0.],
-            [0., 0., 0., 0., 1.],
-            [1., 0., 0., 0., 0.],
-            [0., 0., 0., 1., 0.],
-            [0., 0., 1., 0., 0.]])
+    matrix([[0., 0., 1., 0.],
+            [0., 1., 0., 0.],
+            [1., 0., 0., 0.],
+            [0., 0., 0., 1.]])
     """
 
     # Create SPD matrix with same sparsity structure as Prec
