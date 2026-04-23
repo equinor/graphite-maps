@@ -134,17 +134,16 @@ def find_sparsity_structure_from_graph(
     """
 
     # Create SPD matrix with same sparsity structure as Prec
-    SPD_Prec = nx.to_scipy_sparse_array(Graph_u, weight=None)
-    SPD_Prec = SPD_Prec.astype(np.float64)
+    SPD_Prec = nx.to_scipy_sparse_array(
+        Graph_u, weight=None, dtype=np.float64, format="csc"
+    )
     # Use Gershgorin circle theorem to ensure SP
     # This ensures all eigenvalues are in a circle centered at max_degree+1.0
     # and radius < (max_degree+1.0), so guaranteed > 0
     max_degree = max(dict(Graph_u.degree()).values())
     if verbose_level > 0:
         print(f"max degree of graph is: {max_degree}")
-    SPD_Prec.tolil()
     SPD_Prec.setdiag(max_degree + 1.0)
-    SPD_Prec = sp.csc_matrix(SPD_Prec)
 
     # PT prec P = LLT
     start = time.perf_counter()
