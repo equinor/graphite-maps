@@ -1,15 +1,6 @@
-from typing import Literal
-
-import networkx as nx
 import numpy as np
 from numpy.typing import NDArray
-from scipy.sparse import diags, spmatrix
-
-from graphite_maps import linear_regression as lr
-from graphite_maps.precision_estimation import (
-    find_sparsity_structure_from_chol,
-    fit_precision_cholesky,
-)
+from scipy.sparse import spmatrix
 
 
 def generate_gaussian_noise(
