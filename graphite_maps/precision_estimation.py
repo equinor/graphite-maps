@@ -15,10 +15,9 @@ def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
     Convert a NetworkX graph to a sparse CSC precision matrix,
     setting diagonal to 1.
     """
-    prec = nx.to_scipy_sparse_array(graph)
-    prec.tolil()
+    prec = nx.to_scipy_sparse_array(graph, format="csc")
     prec.setdiag(1)
-    return prec.tocsc()
+    return prec
 
 
 def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
@@ -133,20 +132,46 @@ def find_sparsity_structure_from_graph(
         The reverse permutation matrix.
     P_order : scipy.sparse.csc_matrix
         The in-fill reducing ordering permutation matrix.
+
+    Examples
+    --------
+    >>> import networkx as nx
+    >>> Graph_u = nx.Graph([(0, 1), (0, 3), (0, 4), (1, 4), (3, 4)])
+
+    The "metis" ordering method is not deterministic, so we use "natural" here:
+
+    >>> result = find_sparsity_structure_from_graph(Graph_u, ordering_method="natural")
+    >>> Graph_C, perm_compose, P_rev, P_order = result
+    >>> nx.to_scipy_sparse_array(Graph_C).todense().round(1)
+    array([[ 0. ,  0.4,  0.4,  0.5],
+           [ 0.4,  0. , -0.1,  0.5],
+           [ 0.4, -0.1,  0. ,  0.5],
+           [ 0.5,  0.5,  0.5,  0. ]])
+    >>> perm_compose
+    array([3, 2, 1, 0])
+    >>> P_rev.todense()
+    matrix([[0., 0., 0., 1.],
+            [0., 0., 1., 0.],
+            [0., 1., 0., 0.],
+            [1., 0., 0., 0.]])
+    >>> P_order.todense()
+    matrix([[1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., 0., 0., 1.]])
     """
 
     # Create SPD matrix with same sparsity structure as Prec
-    SPD_Prec = nx.to_scipy_sparse_array(Graph_u, weight=None)
-    SPD_Prec = SPD_Prec.astype(np.float64)
+    SPD_Prec = nx.to_scipy_sparse_array(
+        Graph_u, weight=None, dtype=np.float64, format="csc"
+    )
     # Use Gershgorin circle theorem to ensure SP
     # This ensures all eigenvalues are in a circle centered at max_degree+1.0
     # and radius < (max_degree+1.0), so guaranteed > 0
     max_degree = max(dict(Graph_u.degree()).values())
     if verbose_level > 0:
         print(f"max degree of graph is: {max_degree}")
-    SPD_Prec.tolil()
     SPD_Prec.setdiag(max_degree + 1.0)
-    SPD_Prec = sp.csc_matrix(SPD_Prec)
 
     # PT prec P = LLT
     start = time.perf_counter()
