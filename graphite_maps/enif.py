@@ -13,50 +13,7 @@ from graphite_maps.precision_estimation import (
     find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
-
-
-def generate_gaussian_noise(
-    n: int, Prec: spmatrix, seed: int | None = None, verbose_level: int = 0
-) -> NDArray[np.floating]:
-    """
-    Generates 'n' samples of Gaussian noise with precision 'Prec'.
-
-    Parameters
-    ----------
-    n : int
-        The number of samples to generate.
-    Prec : scipy.sparse.spmatrix
-        The precision matrix for the Gaussian noise, assumed to be sparse.
-
-    Returns
-    -------
-    np.ndarray
-        The Gaussian noise array of shape (n, m), where Prec has shape (m, m).
-    """
-
-    m = Prec.shape[0]
-    rng = np.random.default_rng(seed)
-    eps = rng.normal(
-        loc=0,
-        scale=np.sqrt(np.linalg.inv(Prec.toarray()).diagonal()),
-        size=(n, m),
-    )
-
-    # standard_normal_samples = rng.normal(size=(n, m))
-    # cholesky_factor = cholesky(Prec)
-
-    # Transform the samples using the inverse Cholesky factor
-    # This transformation results in samples from N(0, Prec^-1)
-    # eps = cholesky_factor.solve_A(standard_normal_samples.T).T
-
-    assert eps.shape == (n, m), "Sampling returns wrong size"
-
-    if verbose_level > 0:
-        print(
-            f"Sampling with seed={seed}\nSampled Gaussian noise with shape {eps.shape}"
-        )
-
-    return eps
+from graphite_maps.utils import generate_gaussian_noise
 
 
 class EnIF:
@@ -278,8 +235,6 @@ class EnIF:
         self, n: int, seed: int | None = None, verbose_level: int = 0
     ) -> NDArray[np.floating]:
         """Sample n realizations of observation noise."""
-        if n < 1:
-            raise ValueError(f"`n` should be g.e. 1, got {n}")
 
         return generate_gaussian_noise(
             n, self.Prec_eps, seed=seed, verbose_level=verbose_level - 1
