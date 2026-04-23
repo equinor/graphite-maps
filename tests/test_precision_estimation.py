@@ -1,7 +1,43 @@
 import numpy as np
+import pytest
+import scipy as sp
 from graphite_maps import precision_estimation as precest
 from scipy.linalg import det
-from scipy.sparse import diags
+from scipy.sparse import csc_array, diags
+
+
+@pytest.mark.parametrize("seed", range(99))
+def test_gershgorin_spd_adjustment_on_random_matrices(seed):
+    rng = np.random.default_rng(seed)
+    n = rng.integers(3, 25)
+    A = rng.normal(size=(n, n))
+
+    prec = A + A.T  # Symmetric, but not necessarily pos def
+
+    prec_posdef = precest.gershgorin_spd_adjustment(csc_array(prec)).todense()
+    assert np.min(np.linalg.eigvals(prec_posdef)) > 0
+
+
+def test_objective_twice():
+    # A regression test: ensure that two calls return the same result.
+    rng = np.random.default_rng(42)
+
+    C_k = np.exp(rng.normal(0, 0.1, size=5))
+    U = rng.normal(size=(5, 5))
+
+    value1 = precest.objective_function(C_k, U)
+    value2 = precest.objective_function(C_k, U)
+    np.testing.assert_allclose(value1, value2)
+
+    # Check gradient
+    rmse = sp.optimize.check_grad(
+        precest.objective_function,
+        precest.gradient,
+        np.array([1, 2, 3, 4, 4.5]),
+        U,
+        rng=rng,
+    )
+    assert rmse <= 0.002
 
 
 def test_precision_graph_conversion():
@@ -12,6 +48,7 @@ def test_precision_graph_conversion():
         [-1, 0, 1],
         shape=(p, p),
         format="csc",
+        dtype=np.float64,
     )
 
     # Convert to graph and back to matrix
@@ -35,6 +72,7 @@ def test_gershgorin_spd_adjustment():
         [-1, 0, 1],
         shape=(p, p),
         format="csc",
+        dtype=np.float64,
     )
     A = -A  # For p odd det(-A) = -det(A).
 
@@ -46,3 +84,9 @@ def test_gershgorin_spd_adjustment():
 
     # Check if A_adjusted is SPD
     assert det(A_adjusted.toarray()) > 0, "A_adjusted is positive definite"
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])

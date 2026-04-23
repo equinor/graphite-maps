@@ -43,6 +43,19 @@ def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
     -------
     scipy.sparse.csc_matrix
         The SPD matrix after Gershgorin-style diagonal adjustment.
+
+
+    Examples
+    --------
+    >>> prec = np.array([[2. , 1.1, 0.4, 0.2],
+    ...                  [1.1, 1.6, 0.6, 1.2],
+    ...                  [0.4, 0.6, 0.8, 1.2],
+    ...                  [0.2, 1.2, 1.2, 0.4]])
+    >>> gershgorin_spd_adjustment(sp.csc_array(prec)).todense()
+    array([[2. , 1.1, 0.4, 0.2],
+           [1.1, 3. , 0.6, 1.2],
+           [0.4, 0.6, 2.3, 1.2],
+           [0.2, 1.2, 1.2, 2.7]])
     """
     prec = prec.copy().tocsc()
     eps = 1e-1  # Consider using np.finfo(np.float64).eps**0.5 ?
@@ -178,6 +191,8 @@ def objective_function(
     float
         The value of `objective_function`.
     """
+    C_k = C_k.copy()
+
     C_k[-1] = np.exp(C_k[-1])
     Su = U.dot(C_k)
     n, _ = U.shape
@@ -206,6 +221,8 @@ def gradient(
     np.ndarray
         The gradient of the objective function.
     """
+    C_k = C_k.copy()
+
     n, _ = U.shape
     C_k[-1] = np.exp(C_k[-1])
     prediction = U.dot(C_k)
@@ -237,6 +254,8 @@ def hessian(
     np.ndarray
         The Hessian of the objective function.
     """
+    C_k = C_k.copy()
+
     n, _ = U.shape
     H = U.T.dot(U)
     np.fill_diagonal(H[:-1, :-1], H.diagonal()[:-1] + lambda_l2)  # L2-term
@@ -429,3 +448,9 @@ def fit_precision_cholesky_approximate(
     Prec_approx = C.T @ C
 
     return Prec_approx
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])

@@ -8,8 +8,8 @@ from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
-from . import linear_regression as lr
-from .precision_estimation import (
+from graphite_maps import linear_regression as lr
+from graphite_maps.precision_estimation import (
     find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
@@ -223,7 +223,9 @@ class EnIF:
                 U, Y, verbose_level=verbose_level - 1
             )
 
-        self.residual_variance(U, Y, verbose_level=verbose_level - 1)
+        self.unexplained_variance = lr.residual_variance(
+            U, Y, self.H, verbose_level=verbose_level - 1
+        )
 
     def pushforward_to_canonical(
         self, U: NDArray[np.floating], verbose_level: int = 0
@@ -266,20 +268,11 @@ class EnIF:
         if self.H is None:
             raise ValueError("H is not set.")
 
-        self.residual_variance(U, Y, verbose_level=verbose_level - 1)
-
-        return lr.response_residual(U, Y, self.H, verbose_level=verbose_level - 1)
-
-    def residual_variance(
-        self, U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
-    ) -> None:
-        """Sets self.unexplained_variance from variance on residuals"""
-        if self.H is None:
-            raise ValueError("H is not set.")
-
         self.unexplained_variance = lr.residual_variance(
             U, Y, self.H, verbose_level=verbose_level - 1
         )
+
+        return lr.response_residual(U, Y, self.H, verbose_level=verbose_level - 1)
 
     def generate_observation_noise(
         self, n: int, seed: int | None = None, verbose_level: int = 0
@@ -464,3 +457,9 @@ class EnIF:
             or self.P_rev is None
             or self.P_order is None
         )
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])
