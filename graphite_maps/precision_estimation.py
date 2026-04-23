@@ -135,23 +135,27 @@ def find_sparsity_structure_from_graph(
     --------
     >>> import networkx as nx
     >>> Graph_u = nx.Graph([(0, 1), (0, 3), (0, 4), (1, 4), (3, 4)])
-    >>> Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(Graph_u)
+    
+    The "metis" ordering method is not deterministic, so we use "natural" here:
+    
+    >>> result = find_sparsity_structure_from_graph(Graph_u, ordering_method="natural")
+    >>> Graph_C, perm_compose, P_rev, P_order = result
     >>> nx.to_scipy_sparse_array(Graph_C).todense().round(1)
-    array([[0. , 0.3, 0.5, 0.5],
-           [0.3, 0. , 0.5, 0.5],
-           [0.5, 0.5, 0. , 0. ],
-           [0.5, 0.5, 0. , 0. ]])
+    array([[ 0. ,  0.4,  0.4,  0.5],
+           [ 0.4,  0. , -0.1,  0.5],
+           [ 0.4, -0.1,  0. ,  0.5],
+           [ 0.5,  0.5,  0.5,  0. ]])
     >>> perm_compose
-    array([3, 0, 1, 2])
+    array([3, 2, 1, 0])
     >>> P_rev.todense()
     matrix([[0., 0., 0., 1.],
             [0., 0., 1., 0.],
             [0., 1., 0., 0.],
             [1., 0., 0., 0.]])
     >>> P_order.todense()
-    matrix([[0., 0., 1., 0.],
+    matrix([[1., 0., 0., 0.],
             [0., 1., 0., 0.],
-            [1., 0., 0., 0.],
+            [0., 0., 1., 0.],
             [0., 0., 0., 1.]])
     """
 
