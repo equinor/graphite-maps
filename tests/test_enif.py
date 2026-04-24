@@ -43,6 +43,43 @@ def create_ar1_precision(p, phi):
     return Prec_u
 
 
+def test_snapshot():
+    """This snapshot test is meant to altert us if behavoir changes.
+    If this is intended, then simply update the values below."""
+
+    # Size of the problem
+    rng = np.random.default_rng(42)
+    n_params = 10
+    n_responses = 5
+    n_ensemble = 25
+
+    # Create random data
+    Graph_u = nx.binomial_graph(n_params, p=0.5, seed=42)
+    Prec_eps = sp.sparse.csc_array(np.diag(np.logspace(-3, 3, num=n_responses)))
+    H = sp.sparse.csc_array(rng.normal(size=(n_responses, n_params)))
+    U = rng.normal(size=(n_ensemble, n_params))
+    Y = U @ H.T
+    d = np.mean(Y, axis=0)
+
+    # Call the high-level API, using "Graph_u" instead of "Prec_u"
+    gtmap = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
+    gtmap.fit(U, verbose_level=4)
+    U_posterior = gtmap.transport(U, Y, d, seed=42)
+
+    # Check result
+    desired = np.array([0.01374376, -0.53017874, -0.93565961, -0.34773936, -1.68254708])
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+    # Call the high-level API, using "Prec_u"
+    Prec_u = rng.normal(size=(n_params, n_params))
+    gtmap = EnIF(Prec_u=sp.sparse.csc_array(Prec_u), Prec_eps=Prec_eps, H=H)
+    gtmap.fit(U, verbose_level=4)
+    U_posterior = gtmap.transport(U, Y, d, seed=42)
+
+    desired = np.array([0.97565275, -5.81849624, 2.69723364, -6.16553549, 15.52240368])
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+
 @pytest.mark.parametrize(
     "n, p, phi", [[100, 1000, 0.5], [200, 100, 0.3], [100, 1000, 0.9]]
 )
@@ -151,3 +188,9 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
 
     # Due to no update, we should have equality
     assert np.allclose(U, U_posterior, atol=1e-12)
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])
