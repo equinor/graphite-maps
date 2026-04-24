@@ -53,17 +53,20 @@ class EnIF:
             "Provide either Prec_u or Graph_u"
         )
 
-        if Prec_u is not None and (
-            not isinstance(Prec_u, sp.sparse.sparray) and Prec_u.ndim == 2
+        if Prec_u is not None and not (
+            isinstance(Prec_u, sp.sparse.sparray) and Prec_u.ndim == 2
         ):
             raise TypeError("`Prec_u` must be a 2D sparse array")
         if Prec_u is not None and Prec_u.shape[0] != Prec_u.shape[1]:
             raise ValueError("`Prec_u` must be a square 2D sparse array")
 
-        if H is not None and (
-            not isinstance(H, sp.sparse.sparray) and Prec_u.ndim == 2
-        ):
+        if H is not None and not (isinstance(H, sp.sparse.sparray) and H.ndim == 2):
             raise TypeError("`H` must be a 2D sparse array")
+
+        if Prec_eps is not None and not (
+            isinstance(Prec_eps, sp.sparse.sparray) and Prec_eps.ndim == 2
+        ):
+            raise TypeError("`Prec_eps` must be a 2D sparse array")
 
         self.Prec_u = Prec_u
         self.Graph_u = Graph_u

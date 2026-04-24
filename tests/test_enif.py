@@ -30,13 +30,13 @@ def nrar1(n, p, phi):
 
 
 def create_ar1_precision(p, phi):
-    Prec_u = sp.sparse.diags(
+    Prec_u = sp.sparse.diags_array(
         [
             np.repeat(-phi, p - 1),
             np.concatenate(([1.0], np.repeat(1.0 + phi**2, p - 2), [1.0])),
             np.repeat(-phi, p - 1),
         ],
-        [-1, 0, 1],
+        offsets=[-1, 0, 1],
         shape=(p, p),
         format="csc",
     )
@@ -58,9 +58,9 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
     sd_eps = 1
     H = np.zeros((1, p))
     H[0, p // 2] = 1  # observe the middle component of the state
-    H = sp.sparse.csc_matrix(H)
+    H = sp.sparse.csc_array(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
-    Prec_eps = sp.sparse.csc_matrix(Prec_eps)
+    Prec_eps = sp.sparse.csc_array(Prec_eps)
 
     # Run the "forward model"
     Y = U @ H.T
@@ -101,9 +101,9 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
     sd_eps = 1
     H = np.zeros((1, p))
     H[0, p // 2] = 1  # observe the middle component of the state
-    H = sp.sparse.csc_matrix(H)
+    H = sp.sparse.csc_array(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
-    Prec_eps = sp.sparse.csc_matrix(Prec_eps)
+    Prec_eps = sp.sparse.csc_array(Prec_eps)
 
     # Run the "forward model"
     Y = U @ H.T
@@ -140,9 +140,9 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
     sd_eps = 1
     H = np.zeros((1, p))
     H[0, p // 2] = 1  # observe the middle component of the state
-    H = sp.sparse.csc_matrix(H)
+    H = sp.sparse.csc_array(H)
     Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
-    Prec_eps = sp.sparse.csc_matrix(Prec_eps)
+    Prec_eps = sp.sparse.csc_array(Prec_eps)
 
     # Notice: No update in canonical space
     gtmap_pullpush = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
