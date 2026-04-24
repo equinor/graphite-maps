@@ -63,17 +63,17 @@ def test_snapshot():
 
     # Call the high-level API, using "Graph_u" instead of "Prec_u"
     gtmap = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
+    gtmap.fit(U, ordering_method="natural")
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
     # Check result
-    desired = np.array([0.01374376, -0.53017874, -0.93565961, -0.34773936, -1.68254708])
+    desired = np.array([0.031458, -0.488617, -0.904491, -0.3258, -1.604964])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
 
     # Call the high-level API, using "Prec_u"
     Prec_u = rng.normal(size=(n_params, n_params))
     gtmap = EnIF(Prec_u=sp.sparse.csc_array(Prec_u), Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
+    gtmap.fit(U, ordering_method="natural")
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
     desired = np.array([0.97565275, -5.81849624, 2.69723364, -6.16553549, 15.52240368])
