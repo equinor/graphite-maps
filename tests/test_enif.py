@@ -151,3 +151,42 @@ def test_that_pullback_of_pushforward_equals_input(n, p, phi):
 
     # Due to no update, we should have equality
     assert np.allclose(U, U_posterior, atol=1e-12)
+
+
+def test_that_iterative_pullback_matches_cholesky():
+    n = 100
+    p = 500
+    phi = 0.5
+    U = nrar1(n, p, phi)
+    Prec_u = create_ar1_precision(p, phi)
+
+    d = np.array([30.0])
+    sd_eps = 1
+    H = np.zeros((1, p))
+    H[0, p // 2] = 1
+    H = sp.sparse.csc_array(H)
+    Prec_eps = np.array([1 / sd_eps**2], ndmin=2)
+    Prec_eps = sp.sparse.csc_array(Prec_eps)
+    Y = U @ H.T
+
+    # Pushforward and update so the pullback solves a non-trivial posterior system
+    gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
+    canonical = gtmap.pushforward_to_canonical(U)
+    residual = gtmap.response_residual(U, Y)
+    eps = gtmap.generate_observation_noise(n, seed=42)
+    canonical_posterior = gtmap.update_canonical(canonical, residual + eps, d)
+
+    # Full solve: both paths should agree
+    U_chol = gtmap.pullback_from_canonical(canonical_posterior, iterative=False)
+    U_iter = gtmap.pullback_from_canonical(canonical_posterior, iterative=True)
+    assert np.allclose(U_chol, U_iter, atol=1e-3)
+
+    # Partial solve: only update the middle half of the state
+    update_indices = np.arange(p // 4, 3 * p // 4)
+    U_chol_partial = gtmap.pullback_from_canonical(
+        canonical_posterior, update_indices=update_indices, U_prior=U, iterative=False
+    )
+    U_iter_partial = gtmap.pullback_from_canonical(
+        canonical_posterior, update_indices=update_indices, U_prior=U, iterative=True
+    )
+    assert np.allclose(U_chol_partial, U_iter_partial, atol=1e-3)
