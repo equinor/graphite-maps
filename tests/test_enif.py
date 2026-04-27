@@ -72,11 +72,14 @@ def test_snapshot():
 
     # Call the high-level API, using "Prec_u"
     Prec_u = rng.normal(size=(n_params, n_params))
+    Prec_u = Prec_u.T + Prec_u + np.eye(n_params)
+    assert np.abs(np.linalg.eig(Prec_u).eigenvalues.min()) > 0
+
     gtmap = EnIF(Prec_u=sp.sparse.csc_array(Prec_u), Prec_eps=Prec_eps, H=H)
     gtmap.fit(U, ordering_method="natural")
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
-    desired = np.array([0.97565275, -5.81849624, 2.69723364, -6.16553549, 15.52240368])
+    desired = np.array([0.05722, 0.521217, -0.972532, 0.621532, -1.440641])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
 
 
