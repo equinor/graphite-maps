@@ -1,10 +1,10 @@
 import numpy as np
 from numpy.typing import NDArray
-from scipy.sparse import spmatrix
+from scipy.sparse import sparray
 
 
 def generate_gaussian_noise(
-    n: int, Prec: spmatrix, seed: int | None = None, verbose_level: int = 0
+    n: int, Prec: sparray, seed: int | None = None, verbose_level: int = 0
 ) -> NDArray[np.floating]:
     """
     Generates 'n' samples of Gaussian noise with precision 'Prec'.
@@ -13,7 +13,7 @@ def generate_gaussian_noise(
     ----------
     n : int
         The number of samples to generate.
-    Prec : scipy.sparse.spmatrix
+    Prec : scipy.sparse.sparray
         The precision matrix for the Gaussian noise, assumed to be sparse.
 
     Returns
