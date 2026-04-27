@@ -10,46 +10,6 @@ from sksparse.cholmod import Factor, cholesky
 from tqdm import tqdm
 
 
-def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
-    """
-    Performs Gershgorin-style diagonal adjustment on the input symmetric
-    sparse matrix `prec` and returns the adjusted matrix. The adjustment is
-    performed to ensure that the matrix is symmetric positive definite (SPD).
-
-    Parameters
-    ----------
-    prec : scipy.sparse.csc_matrix
-        The input sparse matrix to adjust.
-
-    Returns
-    -------
-    scipy.sparse.csc_matrix
-        The SPD matrix after Gershgorin-style diagonal adjustment.
-
-
-    Examples
-    --------
-    >>> prec = np.array([[2. , 1.1, 0.4, 0.2],
-    ...                  [1.1, 1.6, 0.6, 1.2],
-    ...                  [0.4, 0.6, 0.8, 1.2],
-    ...                  [0.2, 1.2, 1.2, 0.4]])
-    >>> gershgorin_spd_adjustment(sp.csc_array(prec)).todense()
-    array([[2. , 1.1, 0.4, 0.2],
-           [1.1, 3. , 0.6, 1.2],
-           [0.4, 0.6, 2.3, 1.2],
-           [0.2, 1.2, 1.2, 2.7]])
-    """
-    prec = prec.copy().tocsc()
-    eps = 1e-1  # Consider using np.finfo(np.float64).eps**0.5 ?
-
-    diagonal = prec.diagonal()
-    offdiag_abs_sum = np.asarray(np.abs(prec).sum(axis=1)).ravel() - diagonal
-
-    new_diag = np.maximum(offdiag_abs_sum + eps, diagonal)
-    prec.setdiag(new_diag)
-    return prec
-
-
 def find_sparsity_structure_from_chol(
     chol_LLT: Factor,
 ) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
