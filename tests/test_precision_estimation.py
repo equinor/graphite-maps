@@ -2,7 +2,20 @@ import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps import precision_estimation as precest
-from scipy.sparse import diags
+from scipy.linalg import det
+from scipy.sparse import csc_array, diags
+
+
+@pytest.mark.parametrize("seed", range(99))
+def test_gershgorin_spd_adjustment_on_random_matrices(seed):
+    rng = np.random.default_rng(seed)
+    n = rng.integers(3, 25)
+    A = rng.normal(size=(n, n))
+
+    prec = A + A.T  # Symmetric, but not necessarily pos def
+
+    prec_posdef = precest.gershgorin_spd_adjustment(csc_array(prec)).todense()
+    assert np.min(np.linalg.eigvals(prec_posdef)) > 0
 
 
 def test_objective_twice():
@@ -27,23 +40,31 @@ def test_objective_twice():
     assert rmse <= 0.002
 
 
-def test_precision_graph_conversion():
-    # Create a sparse symmetric matrix filled with ones
-    p = 4
+def test_gershgorin_spd_adjustment():
+    # SND: -AR-1(phi) precision, p=odd
+    p = 5  # Important to be odd, relating to determinant properties
+    phi = 0.3
     A = diags(
-        [np.repeat(1, p - 1), np.repeat(1, p), np.repeat(1, p - 1)],
+        [
+            np.repeat(-phi, p - 1),
+            np.concatenate(([1.0], np.repeat(1.0 + phi**2, p - 2), [1.0])),
+            np.repeat(-phi, p - 1),
+        ],
         [-1, 0, 1],
         shape=(p, p),
         format="csc",
         dtype=np.float64,
     )
+    A = -A  # For p odd det(-A) = -det(A).
 
-    # Convert to graph and back to matrix
-    G = precest.precision_to_graph(A)
-    A_converted = precest.graph_to_precision_matrix(G)
+    # Check A is SND (det(A) should be < 0)
+    assert det(A.toarray()) < 0, "A is negative definite"
 
-    # Check if the original and final matrices are the same
-    assert np.array_equal(A.toarray(), A_converted.toarray())
+    # Apply the Gershgorin adjustment
+    A_adjusted = precest.gershgorin_spd_adjustment(A)
+
+    # Check if A_adjusted is SPD
+    assert det(A_adjusted.toarray()) > 0, "A_adjusted is positive definite"
 
 
 if __name__ == "__main__":
