@@ -2,6 +2,7 @@ from typing import Literal
 
 import networkx as nx
 import numpy as np
+import scipy as sp
 from numpy.typing import NDArray
 from scipy.sparse import diags, spmatrix
 from scipy.sparse.linalg import bicgstab
@@ -17,22 +18,27 @@ from graphite_maps.utils import generate_gaussian_noise
 
 
 class EnIF:
-    """
-    Initialize an Ensemble Information Filter (EnIF).
+    """Initialize an Ensemble Information Filter (EnIF).
+
+    The filter is parametrized by the prior precision of the state `u` (or a
+    graph specifying its sparsity), the precision of the observation noise,
+    and optionally the linear map `H`. Anything left as `None` at initialization
+    can be learned from data via `fit`.
 
     Parameters
     ----------
-    Prec_u : spmatrix | None, optional
-        Precision matrix for state vector u (parameters).
-        The default is None.
-    Graph_u : nx.Graph | None, optional
-        Graph representing non-zero structure in Prec_u.
-        The default is None.
-    Prec_eps : spmatrix | None
-        Precision of the observation noise epsilon.
-    H : spmatrix | None, optional
-        Mapping from state vector u (parameters) to reponses y.
-        The default is None.
+    Prec_u : spmatrix, optional
+        Prior precision matrix of the state, shape (params, params). If omitted,
+        it is estimated from data using `Graph_u` as the sparsity pattern.
+    Graph_u : nx.Graph, optional
+        Conditional-independence graph on the `params` state components,
+        defining the sparsity of `Prec_u`. Required when `Prec_u` is not
+        provided.
+    Prec_eps : spmatrix
+        Precision matrix of the observation noise, shape (responses, responses).
+    H : spmatrix, optional
+        Linear observation operator mapping state to responses, shape
+        (responses, params). If omitted, it is estimated from data by `fit`.
     """
 
     def __init__(
@@ -46,6 +52,21 @@ class EnIF:
         assert Prec_u is not None or Graph_u is not None, (
             "Provide either Prec_u or Graph_u"
         )
+
+        if Prec_u is not None and not (
+            isinstance(Prec_u, sp.sparse.sparray) and Prec_u.ndim == 2
+        ):
+            raise TypeError("`Prec_u` must be a 2D sparse array")
+        if Prec_u is not None and Prec_u.shape[0] != Prec_u.shape[1]:
+            raise ValueError("`Prec_u` must be a square 2D sparse array")
+
+        if H is not None and not (isinstance(H, sp.sparse.sparray) and H.ndim == 2):
+            raise TypeError("`H` must be a 2D sparse array")
+
+        if Prec_eps is not None and not (
+            isinstance(Prec_eps, sp.sparse.sparray) and Prec_eps.ndim == 2
+        ):
+            raise TypeError("`Prec_eps` must be a 2D sparse array")
 
         self.Prec_u = Prec_u
         self.Graph_u = Graph_u
@@ -67,8 +88,27 @@ class EnIF:
         ordering_method: str = "metis",
         verbose_level: int = 0,
     ) -> None:
-        """
-        Fit precision of u and (sparse) mapping H:u->y.
+        """Fit the prior precision of `u` and, optionally the mapping `H`.
+
+        If `Prec_u` was not supplied at construction, it is estimated from `U`
+        using the sparsity pattern of `Graph_u`. If `Y` is supplied and `H` was
+        not set at construction, a sparse linear map `H` is learned from `U`
+        to `Y` and the per-response residual variance is stored on the
+        instance. Already-provided quantities are kept as-is.
+
+        Parameters
+        ----------
+        U : ndarray of shape (realizations, parameters)
+            Prior ensemble: `n` realizations of the `p`-dimensional state.
+        Y : ndarray of shape (realizations, responses), optional
+            Response ensemble used to learn `H`. Must be omitted if `H` was
+            provided at construction.
+        learning_algorithm : {"LASSO", "influence-boost"}, default="LASSO"
+            Estimator used to fit `H`. Ignored when `Y` is not provided.
+        ordering_method : str, default="metis"
+            Fill-reducing ordering passed to the Cholesky factorization when
+            estimating `Prec_u`.
+        verbose_level : int, default=0
         """
 
         if self.Prec_u is None:
@@ -100,8 +140,35 @@ class EnIF:
         iterative: bool = False,
         verbose_level: int = 0,
     ) -> NDArray[np.floating]:
-        """
-        Transport U from a sample from the prior to the posterior
+        """Transport a prior ensemble to the posterior given observations `d`.
+
+        Each realization is mapped to the canonical (information) parametrization
+        `eta = Prec_u @ u`, updated with a perturbed-observation information
+        filter step using the current `H`, `Prec_u`, and `Prec_eps`, and then
+        mapped back to the state space. When `update_indices` is given, only
+        those components are solved for and the rest are copied from the
+        prior, which is the usual speed-up for localized updates.
+
+        Parameters
+        ----------
+        U : ndarray of shape (realizations, parameters)
+            Prior ensemble.
+        Y : ndarray of shape (realizations, responses)
+            Response ensemble evaluated on `U`.
+        d : ndarray of shape (responses,)
+            Observed data vector.
+        update_indices : ndarray of int, optional
+            Indices of state components to update. Defaults to all `parameter`
+            components.
+        seed : int, optional
+        iterative : bool, default=False
+        verbose_level : int, default=0
+
+        Returns
+        -------
+        U_post : ndarray of shape (realizations, parameters)
+            Posterior ensemble. Components not listed in `update_indices` are
+            equal to those in `U`.
         """
         n, _ = U.shape
         n_y, m = Y.shape
