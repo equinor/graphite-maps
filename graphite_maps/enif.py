@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 import scipy as sp
 from numpy.typing import NDArray
-from scipy.sparse import diags, spmatrix
+from scipy.sparse import diags_array, sparray
 from scipy.sparse.linalg import bicgstab
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
@@ -27,46 +27,44 @@ class EnIF:
 
     Parameters
     ----------
-    Prec_u : spmatrix, optional
+    Prec_u : sparray, optional
         Prior precision matrix of the state, shape (params, params). If omitted,
         it is estimated from data using `Graph_u` as the sparsity pattern.
     Graph_u : nx.Graph, optional
         Conditional-independence graph on the `params` state components,
         defining the sparsity of `Prec_u`. Required when `Prec_u` is not
         provided.
-    Prec_eps : spmatrix
+    Prec_eps : sparray
         Precision matrix of the observation noise, shape (responses, responses).
-    H : spmatrix, optional
+    H : sparray, optional
         Linear observation operator mapping state to responses, shape
         (responses, params). If omitted, it is estimated from data by `fit`.
     """
 
+    @staticmethod
+    def _validate_sparse_2d(name: str, value: sparray, square: bool = False) -> None:
+        if not (isinstance(value, sp.sparse.sparray) and value.ndim == 2):
+            raise TypeError(f"`{name}` must be a 2D sparse array")
+        if square and value.shape[0] != value.shape[1]:
+            raise ValueError(f"`{name}` must be a square 2D sparse array")
+
     def __init__(
         self,
         *,
-        Prec_u: spmatrix | None = None,
+        Prec_u: sparray | None = None,
         Graph_u: nx.Graph | None = None,
-        Prec_eps: spmatrix | None,
-        H: spmatrix | None = None,
+        Prec_eps: sparray,
+        H: sparray | None = None,
     ) -> None:
         assert Prec_u is not None or Graph_u is not None, (
             "Provide either Prec_u or Graph_u"
         )
 
-        if Prec_u is not None and not (
-            isinstance(Prec_u, sp.sparse.sparray) and Prec_u.ndim == 2
-        ):
-            raise TypeError("`Prec_u` must be a 2D sparse array")
-        if Prec_u is not None and Prec_u.shape[0] != Prec_u.shape[1]:
-            raise ValueError("`Prec_u` must be a square 2D sparse array")
-
-        if H is not None and not (isinstance(H, sp.sparse.sparray) and H.ndim == 2):
-            raise TypeError("`H` must be a 2D sparse array")
-
-        if Prec_eps is not None and not (
-            isinstance(Prec_eps, sp.sparse.sparray) and Prec_eps.ndim == 2
-        ):
-            raise TypeError("`Prec_eps` must be a 2D sparse array")
+        if Prec_u is not None:
+            self._validate_sparse_2d("Prec_u", Prec_u, square=True)
+        if H is not None:
+            self._validate_sparse_2d("H", H)
+        self._validate_sparse_2d("Prec_eps", Prec_eps, square=True)
 
         self.Prec_u = Prec_u
         self.Graph_u = Graph_u
@@ -77,8 +75,8 @@ class EnIF:
         # Convenience for re-use of cholesky and ordering
         self.Graph_C: nx.Graph | None = None
         self.perm_compose: NDArray[np.integer] | None = None
-        self.P_rev: spmatrix | None = None
-        self.P_order: spmatrix | None = None
+        self.P_rev: sparray | None = None
+        self.P_order: sparray | None = None
 
     def fit(
         self,
@@ -223,6 +221,7 @@ class EnIF:
             verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
         )
+        self._validate_sparse_2d("Prec_u", self.Prec_u, square=True)
 
     def fit_H(
         self,
@@ -246,6 +245,7 @@ class EnIF:
             self.H = lr.linear_boost_ic_regression(
                 U, Y, verbose_level=verbose_level - 1
             )
+        self._validate_sparse_2d("H", self.H)
 
         self.unexplained_variance = lr.residual_variance(
             U, Y, self.H, verbose_level=verbose_level - 1
@@ -265,15 +265,13 @@ class EnIF:
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
-    def Prec_residual_noisy(self, verbose_level: int = 0) -> spmatrix:
-        if self.Prec_eps is None:
-            raise ValueError("Prec_eps is not set.")
-        elif self.unexplained_variance is None:
+    def Prec_residual_noisy(self, verbose_level: int = 0) -> sparray:
+        if self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
 
         eps_variances = 1.0 / self.Prec_eps.diagonal()
         residual_noisy_var = self.unexplained_variance + eps_variances
-        Prec_r = diags(1.0 / residual_noisy_var, 0, format="csc")
+        Prec_r = diags_array(1.0 / residual_noisy_var, offsets=0, format="csc")
         assert Prec_r.shape == self.Prec_eps.shape, (
             "Residuals and noise precision should have same shape"
         )

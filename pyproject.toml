@@ -16,7 +16,7 @@ dependencies = [
     "matplotlib",
     "networkx",
     "scikit-learn",
-    "scipy",
+    "scipy>=1.11",
     "tqdm",
 ]
 dynamic = ["version"]
