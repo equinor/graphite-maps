@@ -40,25 +40,6 @@ def test_objective_twice():
     assert rmse <= 0.002
 
 
-def test_precision_graph_conversion():
-    # Create a sparse symmetric matrix filled with ones
-    p = 4
-    A = diags(
-        [np.repeat(1, p - 1), np.repeat(1, p), np.repeat(1, p - 1)],
-        [-1, 0, 1],
-        shape=(p, p),
-        format="csc",
-        dtype=np.float64,
-    )
-
-    # Convert to graph and back to matrix
-    G = precest.precision_to_graph(A)
-    A_converted = precest.graph_to_precision_matrix(G)
-
-    # Check if the original and final matrices are the same
-    assert np.array_equal(A.toarray(), A_converted.toarray())
-
-
 def test_gershgorin_spd_adjustment():
     # SND: -AR-1(phi) precision, p=odd
     p = 5  # Important to be odd, relating to determinant properties

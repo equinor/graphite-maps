@@ -10,23 +10,6 @@ from sksparse.cholmod import Factor, cholesky
 from tqdm import tqdm
 
 
-def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
-    """
-    Convert a NetworkX graph to a sparse CSC precision matrix,
-    setting diagonal to 1.
-    """
-    prec = nx.to_scipy_sparse_array(graph, format="csc")
-    prec.setdiag(1)
-    return prec
-
-
-def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
-    """
-    Convert a sparse symmetric precision matrix to a NetworkX graph.
-    """
-    return nx.from_scipy_sparse_array(precision_matrix)
-
-
 def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
     """
     Performs Gershgorin-style diagonal adjustment on the input symmetric
