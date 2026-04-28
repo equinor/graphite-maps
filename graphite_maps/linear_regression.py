@@ -3,7 +3,7 @@ import scipy.sparse as sp
 from joblib import Parallel, delayed
 from numpy.typing import NDArray
 from scipy.integrate import quad
-from scipy.sparse import spmatrix
+from scipy.sparse import sparray
 from scipy.stats import chi2
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 def linear_l1_regression(
     U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
-) -> sp.csc_matrix:
+) -> sp.csc_array:
     """Performs LASSO regression for each response in Y against predictors in
     U, constructing a sparse matrix of regression coefficients.
 
@@ -30,7 +30,7 @@ def linear_l1_regression(
 
     Returns
     -------
-    H_sparse : scipy.sparse.csc_matrix
+    H_sparse : scipy.sparse.csc_array
         Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
         each response in Y.
     """
@@ -71,7 +71,7 @@ def linear_l1_regression(
                 / scaler_u.scale_[non_zero_ind]
             )
 
-    H_sparse = sp.csc_matrix(
+    H_sparse = sp.csc_array(
         (np.array(values_H), (np.array(i_H), np.array(j_H))), shape=(m, p)
     )
 
@@ -229,7 +229,7 @@ def linear_boost_ic_regression(
     effective_dimension: int | None = None,
     verbose_level: int = 0,
     n_jobs: int = -1,
-) -> sp.csc_matrix:
+) -> sp.csc_array:
     """Performs boosted linear regression for each response in Y against
     predictors in U, constructing a sparse matrix of regression coefficients.
     The complexity is tuned with an information theoretic approach.
@@ -250,7 +250,7 @@ def linear_boost_ic_regression(
 
     Returns
     -------
-    H_sparse : scipy.sparse.csc_matrix
+    H_sparse : scipy.sparse.csc_array
         Sparse matrix (m, p) with re-scaled LASSO regression coefficients for
         each response in Y.
     """
@@ -288,7 +288,7 @@ def linear_boost_ic_regression(
             scaler_y.scale_[j] * nonzero_values / scaler_u.scale_[nonzero_indices]
         )
 
-    H_sparse = sp.csc_matrix(
+    H_sparse = sp.csc_array(
         (np.concatenate(values_H), (np.concatenate(i_H), np.concatenate(j_H))),
         shape=(m, p),
     )
@@ -309,7 +309,7 @@ def linear_boost_ic_regression(
 def response_residual(
     U: NDArray[np.floating],
     Y: NDArray[np.floating],
-    H: spmatrix,
+    H: sparray,
     verbose_level: int = 0,
 ) -> NDArray[np.floating]:
     """Residual from regression H for Y on U"""
@@ -327,7 +327,7 @@ def response_residual(
 def residual_variance(
     U: NDArray[np.floating],
     Y: NDArray[np.floating],
-    H: spmatrix,
+    H: sparray,
     verbose_level: int = 0,
 ) -> NDArray[np.floating]:
     """Variance in Y not explained by U through H"""

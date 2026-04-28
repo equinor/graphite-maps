@@ -16,7 +16,7 @@ dependencies = [
     "matplotlib",
     "networkx",
     "scikit-learn",
-    "scipy",
+    "scipy>=1.11",
     "tqdm",
 ]
 dynamic = ["version"]
@@ -30,8 +30,7 @@ dev = [
     "mypy",
     "pre-commit",
     "pytest",
-    "scikit-sparse; 'el8' not in platform_release", # Must be installed with linking towards libsuitesparse
-    "scikit-sparse < 0.5.0; 'el8' in platform_release",
+    "scikit-sparse < 0.5.0", # Must be installed with linking towards libsuitesparse
     "types-networkx",
     "types-tqdm",
 ]

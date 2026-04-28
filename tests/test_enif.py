@@ -232,6 +232,43 @@ def test_that_iterative_pullback_matches_cholesky():
     assert np.allclose(U_chol_partial, U_iter_partial, atol=1e-3)
 
 
+@pytest.mark.parametrize("algo", ["LASSO", "influence-boost"])
+def test_that_fit_attributes_round_trip_through_reconstruction(algo):
+    n, p, m, phi = 50, 80, 4, 0.5
+    U = nrar1(n, p, phi)
+
+    rng = np.random.default_rng(0)
+    H_true = np.zeros((m, p))
+    for j in range(m):
+        H_true[j, rng.integers(0, p)] = 1.0
+    Y = U @ H_true.T
+
+    Prec_eps = sp.sparse.csc_array(np.eye(m))
+    Graph_u = nx.path_graph(p)
+
+    trainer = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps)
+    trainer.fit(U, Y=Y, learning_algorithm=algo)
+    assert trainer.H.nnz > 0, f"fit({algo}) produced an all-zero H"
+
+    fresh = EnIF(
+        Prec_u=trainer.Prec_u.copy(),
+        Prec_eps=trainer.Prec_eps.copy(),
+        H=trainer.H.copy(),
+    )
+    fresh.unexplained_variance = trainer.unexplained_variance.copy()
+
+    d = np.zeros(m)
+    trainer_post = trainer.transport(U, Y, d, seed=42)
+    fresh_post = fresh.transport(U, Y, d, seed=42)
+
+    assert np.allclose(fresh_post, trainer_post, atol=1e-12), (
+        "Reconstructed EnIF produced a different posterior than the trainer"
+    )
+    assert not np.allclose(trainer_post, U), (
+        "transport() returned the prior unchanged, H had no effect"
+    )
+
+
 if __name__ == "__main__":
     import pytest
 

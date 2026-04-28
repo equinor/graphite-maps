@@ -5,71 +5,14 @@ import numpy as np
 import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.optimize import minimize
-from scipy.sparse import csc_matrix, tril
+from scipy.sparse import csc_array, tril
 from sksparse.cholmod import Factor, cholesky
 from tqdm import tqdm
 
 
-def graph_to_precision_matrix(graph: nx.Graph) -> csc_matrix:
-    """
-    Convert a NetworkX graph to a sparse CSC precision matrix,
-    setting diagonal to 1.
-    """
-    prec = nx.to_scipy_sparse_array(graph, format="csc")
-    prec.setdiag(1)
-    return prec
-
-
-def precision_to_graph(precision_matrix: csc_matrix) -> nx.Graph:
-    """
-    Convert a sparse symmetric precision matrix to a NetworkX graph.
-    """
-    return nx.from_scipy_sparse_array(precision_matrix)
-
-
-def gershgorin_spd_adjustment(prec: sp.spmatrix) -> csc_matrix:
-    """
-    Performs Gershgorin-style diagonal adjustment on the input symmetric
-    sparse matrix `prec` and returns the adjusted matrix. The adjustment is
-    performed to ensure that the matrix is symmetric positive definite (SPD).
-
-    Parameters
-    ----------
-    prec : scipy.sparse.csc_matrix
-        The input sparse matrix to adjust.
-
-    Returns
-    -------
-    scipy.sparse.csc_matrix
-        The SPD matrix after Gershgorin-style diagonal adjustment.
-
-
-    Examples
-    --------
-    >>> prec = np.array([[2. , 1.1, 0.4, 0.2],
-    ...                  [1.1, 1.6, 0.6, 1.2],
-    ...                  [0.4, 0.6, 0.8, 1.2],
-    ...                  [0.2, 1.2, 1.2, 0.4]])
-    >>> gershgorin_spd_adjustment(sp.csc_array(prec)).todense()
-    array([[2. , 1.1, 0.4, 0.2],
-           [1.1, 3. , 0.6, 1.2],
-           [0.4, 0.6, 2.3, 1.2],
-           [0.2, 1.2, 1.2, 2.7]])
-    """
-    prec = prec.copy().tocsc()
-    eps = 1e-1  # Consider using np.finfo(np.float64).eps**0.5 ?
-
-    diagonal = prec.diagonal()
-    offdiag_abs_sum = np.asarray(np.abs(prec).sum(axis=1)).ravel() - diagonal
-
-    new_diag = np.maximum(offdiag_abs_sum + eps, diagonal)
-    prec.setdiag(new_diag)
-    return prec
-
-
 def find_sparsity_structure_from_chol(
     chol_LLT: Factor,
-) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[np.integer], csc_array, csc_array]:
     L = chol_LLT.L()
     p = L.shape[0]
 
@@ -77,7 +20,7 @@ def find_sparsity_structure_from_chol(
     perm_order = chol_LLT.P()
 
     # Create the permutation matrix P
-    P_order = sp.csc_matrix(
+    P_order = sp.csc_array(
         (np.ones(len(perm_order)), (perm_order, np.arange(len(perm_order)))),
         shape=(p, p),
     )
@@ -85,7 +28,7 @@ def find_sparsity_structure_from_chol(
     # Create the reverse order permutation array
     perm_reverse = np.arange(p - 1, -1, -1)
     # Create the reverse permutation matrix
-    P_rev = sp.csc_matrix((np.ones(p), (perm_reverse, np.arange(p))), shape=(p, p))
+    P_rev = sp.csc_array((np.ones(p), (perm_reverse, np.arange(p))), shape=(p, p))
 
     # Apply in-fill reducing ordering permutation to reverse permutation
     perm_compose = perm_order[perm_reverse]
@@ -108,7 +51,7 @@ def find_sparsity_structure_from_graph(
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
     verbose_level: int = 0,
-) -> tuple[nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
+) -> tuple[nx.Graph, NDArray[np.integer], csc_array, csc_array]:
     """
     Finds sparsity structure for lower triangular C so that
       C.T @ C = L @ L.T = P.T @ A @ P.
@@ -128,9 +71,9 @@ def find_sparsity_structure_from_graph(
         The graph representing the non-zero structure in C.
     perm_compose : NDArray[np.integer]
         The composed permutation array.
-    P_rev : scipy.sparse.csc_matrix
+    P_rev : scipy.sparse.csc_array
         The reverse permutation matrix.
-    P_order : scipy.sparse.csc_matrix
+    P_order : scipy.sparse.csc_array
         The in-fill reducing ordering permutation matrix.
 
     Examples
@@ -150,15 +93,15 @@ def find_sparsity_structure_from_graph(
     >>> perm_compose
     array([3, 2, 1, 0])
     >>> P_rev.todense()
-    matrix([[0., 0., 0., 1.],
-            [0., 0., 1., 0.],
-            [0., 1., 0., 0.],
-            [1., 0., 0., 0.]])
+    array([[0., 0., 0., 1.],
+           [0., 0., 1., 0.],
+           [0., 1., 0., 0.],
+           [1., 0., 0., 0.]])
     >>> P_order.todense()
-    matrix([[1., 0., 0., 0.],
-            [0., 1., 0., 0.],
-            [0., 0., 1., 0.],
-            [0., 0., 0., 1.]])
+    array([[1., 0., 0., 0.],
+           [0., 1., 0., 0.],
+           [0., 0., 1., 0.],
+           [0., 0., 0., 1.]])
     """
 
     # Create SPD matrix with same sparsity structure as Prec
@@ -296,7 +239,7 @@ def optimize_sparse_affine_kr_map(
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
     use_tqdm: bool = True,
-) -> csc_matrix:
+) -> csc_array:
     """Optimize the affine Knothe-Rosenblatt (KR) map with standard Gaussian
     reference and l2-regularized dependence.
 
@@ -309,7 +252,7 @@ def optimize_sparse_affine_kr_map(
 
     Returns
     -------
-    scipy.sparse.csc_matrix
+    scipy.sparse.csc_array
         The optimized sparse Cholesky factor of the precision matrix.
     """
 
@@ -319,7 +262,7 @@ def optimize_sparse_affine_kr_map(
     _, p = U.shape
 
     # Initialize a sparse matrix for C_full
-    C_full = sp.lil_matrix((p, p))  # lil_matrix for efficient row operations
+    C_full = sp.lil_array((p, p))  # lil_array for efficient row operations
 
     loop_function = (
         tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
@@ -353,7 +296,7 @@ def optimize_sparse_affine_kr_map(
         C_full[k, non_zero_indices] = res.x
         C_full[k, k] = np.exp(C_full[k, k])  # res.x learns log diag
 
-    # Convert to csc_matrix for efficient storage and arithmetic operations
+    # Convert to csc_array for efficient storage and arithmetic operations
     return C_full.tocsc()
 
 
@@ -365,9 +308,9 @@ def fit_precision_cholesky(
     use_tqdm: bool = True,
     Graph_C: nx.Graph | None = None,
     perm_compose: NDArray[np.integer] | None = None,
-    P_rev: csc_matrix | None = None,
-    P_order: csc_matrix | None = None,
-) -> tuple[csc_matrix, nx.Graph, NDArray[np.integer], csc_matrix, csc_matrix]:
+    P_rev: csc_array | None = None,
+    P_order: csc_array | None = None,
+) -> tuple[csc_array, nx.Graph, NDArray[np.integer], csc_array, csc_array]:
     """
     Estimate the precision matrix using Cholesky decomposition.
     An l2-regularized negative log-likelihood is minimized.
@@ -380,7 +323,7 @@ def fit_precision_cholesky(
 
     Returns
     -------
-    scipy.sparse.csc_matrix
+    scipy.sparse.csc_array
         Estimated precision matrix.
     """
     _, p = U.shape
@@ -421,7 +364,7 @@ def fit_precision_cholesky_approximate(
     optimization_method: str = "L-BFGS-B",
     verbose_level: int = 0,
     use_tqdm: bool = True,
-) -> csc_matrix:
+) -> csc_array:
     """
     Estimate the precision matrix using approximate Cholesky.
     The Cholesky is assumed as sparse as the corresponding precision, with
@@ -444,7 +387,7 @@ def fit_precision_cholesky_approximate(
 
     Returns
     -------
-    scipy.sparse.csc_matrix
+    scipy.sparse.csc_array
         The optimized sparse Cholesky factor of the precision matrix.
     """
 
