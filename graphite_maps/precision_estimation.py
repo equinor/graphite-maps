@@ -115,21 +115,21 @@ def find_sparsity_structure_from_graph(
     # This ensures all eigenvalues are in a circle centered at max_degree+1.0
     # and radius < (max_degree+1.0), so guaranteed > 0
     max_degree = max(dict(Graph_u.degree()).values())
-    log.info(f"max degree of graph is: {max_degree}")
+    log.info("max degree of graph is: %s", max_degree)
     SPD_Prec.setdiag(max_degree + 1.0)
 
     # PT prec P = LLT
     start = time.perf_counter()
     chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
     end = time.perf_counter()
-    log.info(f"Permutation optimization took {end - start:.2f} seconds")
+    log.info("Permutation optimization took %.2f seconds", end - start)
 
     Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_chol(
         chol_LLT=chol_LLT
     )
 
-    log.info(f"Parameters in precision: {tril(SPD_Prec).nnz}\n")
-    log.info(f"Parameters in Cholesky factor: {Graph_C.number_of_edges()}")
+    log.info("Parameters in precision: %s\n", tril(SPD_Prec).nnz)
+    log.info("Parameters in Cholesky factor: %s", Graph_C.number_of_edges())
 
     # Return the results
     return Graph_C, perm_compose, P_rev, P_order
@@ -342,7 +342,7 @@ def fit_precision_cholesky(
     # 2.b Compute log-determinant of estimate, for logging
     L_r = P_rev @ C.T @ P_rev  # Factor of reverse precision
     prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
-    log.info(f"Precision has log-determinant: {prec_logdet:.3f}")
+    log.info("Precision has log-determinant: %.3f", prec_logdet)
 
     # 3. Unwrap C to yield precision (Eqn 73 in paper)
     Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T

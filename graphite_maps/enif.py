@@ -278,9 +278,9 @@ class EnIF:
             "Residuals and noise precision should have same shape"
         )
 
-        log.info(f"Total residual variance: {np.sum(residual_noisy_var):.4f}")
-        log.info(f"Unexplained variance: {np.sum(self.unexplained_variance):.4f}")
-        log.info(f"Measurement variance: {np.sum(eps_variances):.4f}")
+        log.info("Total residual variance: %.4f", np.sum(residual_noisy_var))
+        log.info("Unexplained variance: %.4f", np.sum(self.unexplained_variance))
+        log.info("Measurement variance: %.4f", np.sum(eps_variances))
         return Prec_r
 
     def response_residual(
@@ -335,7 +335,7 @@ class EnIF:
         assert n == n_r, "canonical and residual_noisy must have equal samples"
         assert d.shape == (m,), "d and residual_noisy must have matching dimension"
 
-        def logdet():
+        def logdet() -> float:
             # Compute the current log-determinant
             chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
             return 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
@@ -472,7 +472,7 @@ class EnIF:
             current_nodes = new_nodes.copy()
 
         param_num, tot_num = len(all_nodes), adjacency.shape[0]
-        log.info(f"Retrieving {param_num} parameters out of {tot_num}")
+        log.info("Retrieving %d parameters out of %d", param_num, tot_num)
 
         return np.array(list(all_nodes), dtype=int)
 

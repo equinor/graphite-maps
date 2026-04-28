@@ -46,7 +46,7 @@ def linear_l1_regression(
     if n != n_y:
         raise ValueError("Number of samples in U and Y must be the same")
 
-    log.info(f"Learning sparse linear map of shape {(m, p)}")
+    log.info("Learning sparse linear map of shape %s", (m, p))
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -81,7 +81,9 @@ def linear_l1_regression(
 
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
-    log.info(f"Density: {H_sparse.nnz / (m * p):.1%} ({H_sparse.nnz} / {m * p})")
+    log.info(
+        "Density: %.1f%% (%d / %d)", 100 * H_sparse.nnz / (m * p), H_sparse.nnz, m * p
+    )
 
     return H_sparse
 
@@ -259,7 +261,7 @@ def linear_boost_ic_regression(
     if n != n_y:
         raise ValueError("Number of samples in U and Y must be the same")
 
-    log.info(f"Learning sparse linear map of shape {(m, p)}")
+    log.info("Learning sparse linear map of shape %s", (m, p))
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -293,7 +295,9 @@ def linear_boost_ic_regression(
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
-    log.info(f"Density: {H_sparse.nnz / (m * p):.1%} ({H_sparse.nnz} / {m * p})")
+    log.info(
+        "Density: %.1f%% (%d / %d)", 100 * H_sparse.nnz / (m * p), H_sparse.nnz, m * p
+    )
 
     return H_sparse
 
