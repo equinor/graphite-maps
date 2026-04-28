@@ -107,8 +107,8 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
 
     # EnIF high-level API
     gtmap = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
-    U_posterior_highlevel = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
+    gtmap.fit(U)
+    U_posterior_highlevel = gtmap.transport(U, Y, d, seed=42)
 
     # EnIF low-level API
     gtmap_lowlevel = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
@@ -150,8 +150,8 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
 
     # EnIF high-level API with known precision
     gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
-    U_posterior_enif = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
+    gtmap.fit(U)
+    U_posterior_enif = gtmap.transport(U, Y, d, seed=42)
 
     # Create Kalman update -- use same noise
     eps = gtmap.generate_observation_noise(n, seed=42)

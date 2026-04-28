@@ -1,3 +1,4 @@
+import logging
 import time
 
 import networkx as nx
@@ -8,6 +9,9 @@ from scipy.optimize import minimize
 from scipy.sparse import csc_array, tril
 from sksparse.cholmod import Factor, cholesky
 from tqdm import tqdm
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 def find_sparsity_structure_from_chol(
@@ -50,7 +54,6 @@ def find_sparsity_structure_from_chol(
 def find_sparsity_structure_from_graph(
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
-    verbose_level: int = 0,
 ) -> tuple[nx.Graph, NDArray[np.integer], csc_array, csc_array]:
     """
     Finds sparsity structure for lower triangular C so that
@@ -112,26 +115,21 @@ def find_sparsity_structure_from_graph(
     # This ensures all eigenvalues are in a circle centered at max_degree+1.0
     # and radius < (max_degree+1.0), so guaranteed > 0
     max_degree = max(dict(Graph_u.degree()).values())
-    if verbose_level > 0:
-        print(f"max degree of graph is: {max_degree}")
+    log.info(f"max degree of graph is: {max_degree}")
     SPD_Prec.setdiag(max_degree + 1.0)
 
     # PT prec P = LLT
     start = time.perf_counter()
     chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
     end = time.perf_counter()
-    if verbose_level > 0:
-        print(f"Permutation optimization took {end - start:.2f} seconds")
+    log.info(f"Permutation optimization took {end - start:.2f} seconds")
 
     Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_chol(
         chol_LLT=chol_LLT
     )
 
-    if verbose_level > 0:
-        print(
-            f"Parameters in precision: {tril(SPD_Prec).nnz}\n"
-            f"Parameters in Cholesky factor: {Graph_C.number_of_edges()}"
-        )
+    log.info(f"Parameters in precision: {tril(SPD_Prec).nnz}\n")
+    log.info(f"Parameters in Cholesky factor: {Graph_C.number_of_edges()}")
 
     # Return the results
     return Graph_C, perm_compose, P_rev, P_order
@@ -237,7 +235,6 @@ def optimize_sparse_affine_kr_map(
     U: NDArray[np.floating],
     G: nx.Graph,
     optimization_method: str = "L-BFGS-B",
-    verbose_level: int = 0,
     use_tqdm: bool = True,
 ) -> csc_array:
     """Optimize the affine Knothe-Rosenblatt (KR) map with standard Gaussian
@@ -256,8 +253,7 @@ def optimize_sparse_affine_kr_map(
         The optimized sparse Cholesky factor of the precision matrix.
     """
 
-    if verbose_level > 0:
-        print("Starting statistical fitting of precision")
+    log.info("Starting statistical fitting of precision")
 
     _, p = U.shape
 
@@ -304,7 +300,6 @@ def fit_precision_cholesky(
     U: NDArray[np.floating],
     Graph_u: nx.Graph,
     ordering_method: str = "metis",
-    verbose_level: int = 0,
     use_tqdm: bool = True,
     Graph_C: nx.Graph | None = None,
     perm_compose: NDArray[np.integer] | None = None,
@@ -333,7 +328,6 @@ def fit_precision_cholesky(
         # 1. Find in-fill reducing ordering for C
         Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(
             Graph_u,
-            verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
         )
 
@@ -342,15 +336,13 @@ def fit_precision_cholesky(
     C = optimize_sparse_affine_kr_map(
         U=U_perm,
         G=Graph_C,
-        verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
 
     # 2.b Compute log-determinant of estimate, for logging
-    if verbose_level > 0:
-        L_r = P_rev @ C.T @ P_rev  # Factor of reverse precision
-        prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
-        print(f"Precision has log-determinant: {prec_logdet}")
+    L_r = P_rev @ C.T @ P_rev  # Factor of reverse precision
+    prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
+    log.info(f"Precision has log-determinant: {prec_logdet:.3f}")
 
     # 3. Unwrap C to yield precision (Eqn 73 in paper)
     Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
@@ -362,7 +354,6 @@ def fit_precision_cholesky_approximate(
     G: nx.Graph,
     neighbourhood_expansion: int = 2,
     optimization_method: str = "L-BFGS-B",
-    verbose_level: int = 0,
     use_tqdm: bool = True,
 ) -> csc_array:
     """
@@ -409,7 +400,6 @@ def fit_precision_cholesky_approximate(
         U=U,
         G=G_expanded,
         optimization_method=optimization_method,
-        verbose_level=verbose_level - 1,
         use_tqdm=use_tqdm,
     )
 

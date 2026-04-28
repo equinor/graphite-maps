@@ -3,6 +3,18 @@ from numpy.typing import NDArray
 from scipy.sparse import sparray
 
 
+class OnDemand:
+    """Only call the function if needed, see:
+    https://orbifold.xyz/logging-expensive.html
+    """
+
+    def __init__(self, callable) -> None:
+        self.callable = callable
+
+    def __repr__(self) -> str:
+        return repr(self.callable())
+
+
 def generate_gaussian_noise(
     n: int, Prec: sparray, seed: int | None = None, verbose_level: int = 0
 ) -> NDArray[np.floating]:
