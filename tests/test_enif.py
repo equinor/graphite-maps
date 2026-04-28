@@ -43,6 +43,46 @@ def create_ar1_precision(p, phi):
     return Prec_u
 
 
+def test_snapshot():
+    """This snapshot test is meant to altert us if behavoir changes.
+    If this is intended, then simply update the values below."""
+
+    # Size of the problem
+    rng = np.random.default_rng(42)
+    n_params = 10
+    n_responses = 5
+    n_ensemble = 25
+
+    # Create random data
+    Graph_u = nx.binomial_graph(n_params, p=0.5, seed=42)
+    Prec_eps = sp.sparse.csc_array(np.diag(np.logspace(-3, 3, num=n_responses)))
+    H = sp.sparse.csc_array(rng.normal(size=(n_responses, n_params)))
+    U = rng.normal(size=(n_ensemble, n_params))
+    Y = U @ H.T
+    d = np.mean(Y, axis=0)
+
+    # Call the high-level API, using "Graph_u" instead of "Prec_u"
+    gtmap = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
+    gtmap.fit(U, ordering_method="natural")
+    U_posterior = gtmap.transport(U, Y, d, seed=42)
+
+    # Check result
+    desired = np.array([0.031458, -0.488617, -0.904491, -0.3258, -1.604964])
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+    # Call the high-level API, using "Prec_u"
+    Prec_u = rng.normal(size=(n_params, n_params))
+    Prec_u = Prec_u.T + Prec_u + np.eye(n_params)
+    assert np.abs(np.linalg.eig(Prec_u).eigenvalues.min()) > 0
+
+    gtmap = EnIF(Prec_u=sp.sparse.csc_array(Prec_u), Prec_eps=Prec_eps, H=H)
+    gtmap.fit(U, ordering_method="natural")
+    U_posterior = gtmap.transport(U, Y, d, seed=42)
+
+    desired = np.array([0.05722, 0.521217, -0.972532, 0.621532, -1.440641])
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+
 @pytest.mark.parametrize(
     "n, p, phi", [[100, 1000, 0.5], [200, 100, 0.3], [100, 1000, 0.9]]
 )
@@ -227,3 +267,9 @@ def test_that_fit_attributes_round_trip_through_reconstruction(algo):
     assert not np.allclose(trainer_post, U), (
         "transport() returned the prior unchanged, H had no effect"
     )
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main(args=[__file__, "--doctest-modules", "-v"])
