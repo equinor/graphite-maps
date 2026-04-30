@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps import precision_estimation as precest
+from scipy.optimize import minimize
 
 
 def test_objective_twice():
@@ -24,6 +25,34 @@ def test_objective_twice():
         rng=rng,
     )
     assert rmse <= 0.002
+
+
+def test_closed_form_matches_iterative_solver():
+    """Closed-form row solver agrees with the iterative (L-BFGS-B) solution."""
+    rng = np.random.default_rng(0)
+    n, n_cols = 200, 5
+    U_reduced = rng.normal(size=(n, n_cols))
+    lambda_l2 = 2.0 * n_cols
+
+    # Closed-form solution introduced in commit 864f430
+    off_diag_cf, diag_cf = precest.solve_row_closed_form(U_reduced, lambda_l2)
+
+    # Iterative reference solution (L-BFGS-B on the log-diagonal parametrisation)
+    x0 = np.zeros(n_cols)
+    res = minimize(
+        fun=precest.objective_function,
+        x0=x0,
+        args=(U_reduced, lambda_l2),
+        method="L-BFGS-B",
+        jac=precest.gradient,
+        tol=1e-12,
+        options={"gtol": 1e-9},
+    )
+    off_diag_iter = res.x[:-1]
+    diag_iter = np.exp(res.x[-1])
+
+    np.testing.assert_allclose(off_diag_cf, off_diag_iter, rtol=1e-4, atol=1e-6)
+    np.testing.assert_allclose(diag_cf, diag_iter, rtol=1e-4)
 
 
 if __name__ == "__main__":
