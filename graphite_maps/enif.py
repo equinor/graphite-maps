@@ -341,8 +341,8 @@ class EnIF:
             return 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
 
         # Only print this if logging is on. Cholesky can be heavy
-        logdet = OnDemand(logdet)
-        log.info("Prior precision log-determinant: %.3f", logdet)
+        logdet_ondemand = OnDemand(logdet)
+        log.info("Prior precision log-determinant: %.3f", logdet_ondemand)
 
         updated_canonical = canonical.copy()
         Prec_r = self.Prec_residual_noisy()
