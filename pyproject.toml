@@ -18,6 +18,7 @@ dependencies = [
     "scikit-learn",
     "scipy>=1.11",
     "tqdm",
+    "gstools>=1.7.0",
 ]
 dynamic = ["version"]
 
