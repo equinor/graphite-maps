@@ -3,6 +3,10 @@ import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps.enif import EnIF
+from graphite_maps.linear_regression import linear_boost_ic_regression
+from graphite_maps.precision_estimation import (
+    fit_precision_cholesky_approximate,
+)
 
 
 def rar1(T, phi, rng=None):
@@ -43,7 +47,7 @@ def create_ar1_precision(p, phi):
     return Prec_u
 
 
-def test_snapshot():
+def test_snapshot_highlevel():
     """This snapshot test is meant to altert us if behavoir changes.
     If this is intended, then simply update the values below."""
 
@@ -81,6 +85,76 @@ def test_snapshot():
 
     desired = np.array([0.05722, 0.521217, -0.972532, 0.621532, -1.440641])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+
+def test_snapshot_lowlevel():
+    """Test calling the API using some low level functions.
+    This mimics the usage in:
+    https://github.com/equinor/ert/blob/da04bf5924c4f0cebee0bf5d941f0e5c2acc8876/src/ert/analysis/_enif_update.py
+    """
+
+    # Size of the problem
+    rng = np.random.default_rng(42)
+    n_params = 10
+    n_responses = 5
+    n_ensemble = 25
+
+    # Create random data
+    Graph_u = nx.binomial_graph(n_params, p=0.5, seed=42)
+    Prec_eps = sp.sparse.csc_array(np.diag(np.logspace(-3, 3, num=n_responses)))
+    H = sp.sparse.csc_array(rng.normal(size=(n_responses, n_params)))
+    U = rng.normal(size=(n_ensemble, n_params))
+    Y = U @ H.T
+    d = np.mean(Y, axis=0)
+
+    # Call fit: Learn sparse linear map only
+    H = linear_boost_ic_regression(
+        U=U,
+        Y=Y,
+        verbose_level=5,
+    )
+
+    desired_H = np.array([0.0, 0.74667254, 1.21359438, 0.0, 0.0])
+    np.testing.assert_allclose(np.diag(H.todense())[:5], desired_H, rtol=1e-6)
+
+    # Estimate precision matrix
+    Prec_u = fit_precision_cholesky_approximate(
+        U=U,
+        G=Graph_u,
+        neighbourhood_expansion=2,
+        verbose_level=2,
+        use_tqdm=True,
+    )
+
+    desired_Prec_u = np.array(
+        [1.5617989, 1.62943966, 1.14376027, 1.05904362, 1.07834702]
+    )
+    np.testing.assert_allclose(np.diag(Prec_u.todense())[:5], desired_Prec_u, rtol=1e-6)
+
+    # Initialize EnIF object with full precision matrices
+    gtmap = EnIF(
+        Prec_u=Prec_u,
+        Prec_eps=Prec_eps,
+        H=H,
+    )
+
+    update_indices = gtmap.get_update_indices(
+        neighbor_propagation_order=15, verbose_level=1
+    )
+    X_updated = gtmap.transport(
+        U=U,
+        Y=Y,
+        d=d,
+        update_indices=update_indices,
+        iterative=False,
+        verbose_level=5,
+        seed=13,
+    )
+
+    desired_X_updated = np.array(
+        [0.14212882, -0.51616552, -0.78515918, -0.41335858, -1.46006239]
+    )
+    np.testing.assert_allclose(np.diag(X_updated)[:5], desired_X_updated, rtol=1e-6)
 
 
 @pytest.mark.parametrize(
