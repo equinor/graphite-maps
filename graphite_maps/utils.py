@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import sparray
@@ -8,11 +11,11 @@ class OnDemand:
     https://orbifold.xyz/logging-expensive.html
     """
 
-    def __init__(self, callable) -> None:
-        self.callable = callable
+    def __init__(self, func: Callable[[], Any]) -> None:
+        self.func = func
 
     def __repr__(self) -> str:
-        return repr(self.callable())
+        return repr(self.func())
 
 
 def generate_gaussian_noise(
