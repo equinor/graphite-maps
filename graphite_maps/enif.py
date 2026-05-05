@@ -335,12 +335,10 @@ class EnIF:
         assert n == n_r, "canonical and residual_noisy must have equal samples"
         assert d.shape == (m,), "d and residual_noisy must have matching dimension"
 
-        # Compute the current log-determinant
-        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-        logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
-
         # Only print this if logging is on. Cholesky can be heavy
         if log.isEnabledFor(logging.INFO):
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
         updated_canonical = canonical.copy()
