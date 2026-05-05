@@ -1,3 +1,6 @@
+import logging
+import sys
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -50,6 +53,11 @@ def create_ar1_precision(p, phi):
 def test_snapshot_highlevel():
     """This snapshot test is meant to altert us if behavoir changes.
     If this is intended, then simply update the values below."""
+
+    # Smoketest that logging works
+    log = logging.getLogger("graphite_maps")
+    log.setLevel(logging.DEBUG)
+    log.addHandler(logging.StreamHandler(stream=sys.stdout))
 
     # Size of the problem
     rng = np.random.default_rng(42)

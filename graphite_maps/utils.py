@@ -1,21 +1,6 @@
-from collections.abc import Callable
-from typing import Any
-
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import sparray
-
-
-class OnDemand:
-    """Only call the function if needed, see:
-    https://orbifold.xyz/logging-expensive.html
-    """
-
-    def __init__(self, func: Callable[[], Any]) -> None:
-        self.func = func
-
-    def __repr__(self) -> str:
-        return repr(self.func())
 
 
 def generate_gaussian_noise(

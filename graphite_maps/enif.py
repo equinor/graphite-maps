@@ -15,7 +15,7 @@ from graphite_maps.precision_estimation import (
     find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
-from graphite_maps.utils import OnDemand, generate_gaussian_noise
+from graphite_maps.utils import generate_gaussian_noise
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -335,14 +335,13 @@ class EnIF:
         assert n == n_r, "canonical and residual_noisy must have equal samples"
         assert d.shape == (m,), "d and residual_noisy must have matching dimension"
 
-        def logdet() -> float:
-            # Compute the current log-determinant
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            return 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+        # Compute the current log-determinant
+        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+        logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
 
         # Only print this if logging is on. Cholesky can be heavy
-        logdet_ondemand = OnDemand(logdet)
-        log.info("Prior precision log-determinant: %.3f", logdet_ondemand)
+        if log.isEnabledFor(logging.INFO):
+            log.info("Prior precision log-determinant: %.3f", logdet_value)
 
         updated_canonical = canonical.copy()
         Prec_r = self.Prec_residual_noisy()
