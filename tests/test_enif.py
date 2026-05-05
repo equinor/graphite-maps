@@ -113,7 +113,6 @@ def test_snapshot_lowlevel():
     H = linear_boost_ic_regression(
         U=U,
         Y=Y,
-        verbose_level=5,
     )
 
     desired_H = np.array([0.0, 0.74667254, 1.21359438, 0.0, 0.0])
@@ -124,7 +123,6 @@ def test_snapshot_lowlevel():
         U=U,
         G=Graph_u,
         neighbourhood_expansion=2,
-        verbose_level=2,
         use_tqdm=True,
     )
 
@@ -141,7 +139,7 @@ def test_snapshot_lowlevel():
     )
 
     update_indices = gtmap.get_update_indices(
-        neighbor_propagation_order=15, verbose_level=1
+        neighbor_propagation_order=15,
     )
     X_updated = gtmap.transport(
         U=U,
@@ -149,7 +147,6 @@ def test_snapshot_lowlevel():
         d=d,
         update_indices=update_indices,
         iterative=False,
-        verbose_level=5,
         seed=13,
     )
 
