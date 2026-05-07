@@ -1,10 +1,15 @@
+import logging
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import sparray
 
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
+
 
 def generate_gaussian_noise(
-    n: int, Prec: sparray, seed: int | None = None, verbose_level: int = 0
+    n: int, Prec: sparray, seed: int | None = None
 ) -> NDArray[np.floating]:
     """
     Generates 'n' samples of Gaussian noise with precision 'Prec'.
@@ -41,9 +46,7 @@ def generate_gaussian_noise(
 
     assert eps.shape == (n, m), "Sampling returns wrong size"
 
-    if verbose_level > 0:
-        print(
-            f"Sampling with seed={seed}\nSampled Gaussian noise with shape {eps.shape}"
-        )
+    log.info("Sampling with seed=%s", seed)
+    log.info("Sampled Gaussian noise with shape=%s", eps.shape)
 
     return eps

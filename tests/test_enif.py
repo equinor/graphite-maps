@@ -1,3 +1,6 @@
+import logging
+import sys
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -51,6 +54,11 @@ def test_snapshot_highlevel():
     """This snapshot test is meant to altert us if behavoir changes.
     If this is intended, then simply update the values below."""
 
+    # Smoketest that logging works
+    log = logging.getLogger("graphite_maps")
+    log.setLevel(logging.DEBUG)
+    log.addHandler(logging.StreamHandler(stream=sys.stdout))
+
     # Size of the problem
     rng = np.random.default_rng(42)
     n_params = 10
@@ -76,14 +84,16 @@ def test_snapshot_highlevel():
 
     # Call the high-level API, using "Prec_u"
     Prec_u = rng.normal(size=(n_params, n_params))
-    Prec_u = Prec_u.T + Prec_u + np.eye(n_params)
-    assert np.abs(np.linalg.eig(Prec_u).eigenvalues.min()) > 0
+    Prec_u = Prec_u.T + Prec_u
+    shift = np.abs(np.linalg.eigvalsh(Prec_u).min()) + 1.0
+    Prec_u = Prec_u + shift * np.eye(n_params)
+    assert np.linalg.eigvalsh(Prec_u).min() > 0
 
     gtmap = EnIF(Prec_u=sp.sparse.csc_array(Prec_u), Prec_eps=Prec_eps, H=H)
     gtmap.fit(U, ordering_method="natural")
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
-    desired = np.array([0.05722, 0.521217, -0.972532, 0.621532, -1.440641])
+    desired = np.array([-0.042127, -0.421971, -0.94604, -0.261284, -1.491031])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
 
 
@@ -111,7 +121,6 @@ def test_snapshot_lowlevel():
     H = linear_boost_ic_regression(
         U=U,
         Y=Y,
-        verbose_level=5,
     )
 
     desired_H = np.array([0.0, 0.74667254, 1.21359438, 0.0, 0.0])
@@ -122,7 +131,6 @@ def test_snapshot_lowlevel():
         U=U,
         G=Graph_u,
         neighbourhood_expansion=2,
-        verbose_level=2,
         use_tqdm=True,
     )
 
@@ -139,7 +147,7 @@ def test_snapshot_lowlevel():
     )
 
     update_indices = gtmap.get_update_indices(
-        neighbor_propagation_order=15, verbose_level=1
+        neighbor_propagation_order=15,
     )
     X_updated = gtmap.transport(
         U=U,
@@ -147,7 +155,6 @@ def test_snapshot_lowlevel():
         d=d,
         update_indices=update_indices,
         iterative=False,
-        verbose_level=5,
         seed=13,
     )
 
@@ -181,8 +188,8 @@ def test_that_posterior_low_level_api_equals_high_level_api(n, p, phi):
 
     # EnIF high-level API
     gtmap = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
-    U_posterior_highlevel = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
+    gtmap.fit(U)
+    U_posterior_highlevel = gtmap.transport(U, Y, d, seed=42)
 
     # EnIF low-level API
     gtmap_lowlevel = EnIF(Graph_u=Graph_u, Prec_eps=Prec_eps, H=H)
@@ -224,8 +231,8 @@ def test_that_enif_equals_kalman_under_exact_precision_and_H(n, p, phi):
 
     # EnIF high-level API with known precision
     gtmap = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
-    gtmap.fit(U, verbose_level=4)
-    U_posterior_enif = gtmap.transport(U, Y, d, seed=42, verbose_level=10)
+    gtmap.fit(U)
+    U_posterior_enif = gtmap.transport(U, Y, d, seed=42)
 
     # Create Kalman update -- use same noise
     eps = gtmap.generate_observation_noise(n, seed=42)

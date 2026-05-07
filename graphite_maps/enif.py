@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 import networkx as nx
@@ -15,6 +16,9 @@ from graphite_maps.precision_estimation import (
     fit_precision_cholesky,
 )
 from graphite_maps.utils import generate_gaussian_noise
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 class EnIF:
@@ -84,7 +88,6 @@ class EnIF:
         Y: NDArray[np.floating] | None = None,
         learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
         ordering_method: str = "metis",
-        verbose_level: int = 0,
     ) -> None:
         """Fit the prior precision of `u` and, optionally the mapping `H`.
 
@@ -106,27 +109,24 @@ class EnIF:
         ordering_method : str, default="metis"
             Fill-reducing ordering passed to the Cholesky factorization when
             estimating `Prec_u`.
-        verbose_level : int, default=0
         """
 
         if self.Prec_u is None:
             self.fit_precision(
                 U,
-                verbose_level=verbose_level - 1,
                 ordering_method=ordering_method,
             )
-        elif verbose_level > 0:
-            print("Precision u exists. Use `fit_precision` to refit if necessary")
+        else:
+            log.info("Precision u exists. Use `fit_precision` to refit if necessary")
         if Y is not None:
             assert self.H is None, "Y should not be provided if H exists"
             self.fit_H(
                 U=U,
                 Y=Y,
                 learning_algorithm=learning_algorithm,
-                verbose_level=verbose_level - 1,
             )
-        elif verbose_level > 0:
-            print("H mapping exists. Use `fit_H` to refit if necessary")
+        else:
+            log.info("H mapping exists. Use `fit_H` to refit if necessary")
 
     def transport(
         self,
@@ -136,7 +136,6 @@ class EnIF:
         update_indices: NDArray[np.integer] | None = None,
         seed: int | None = None,
         iterative: bool = False,
-        verbose_level: int = 0,
     ) -> NDArray[np.floating]:
         """Transport a prior ensemble to the posterior given observations `d`.
 
@@ -160,7 +159,6 @@ class EnIF:
             components.
         seed : int, optional
         iterative : bool, default=False
-        verbose_level : int, default=0
 
         Returns
         -------
@@ -174,19 +172,22 @@ class EnIF:
         assert d.shape == (m,), "Observations must match responses"
 
         # Map parameters to canonical parametrization
-        canonical = self.pushforward_to_canonical(U, verbose_level=verbose_level - 1)
+        canonical = self.pushforward_to_canonical(U)
 
         # Work out residuals and associate unexplained variance
-        residuals = self.response_residual(U, Y, verbose_level=verbose_level - 1)
+        residuals = self.response_residual(U, Y)
         # Due to observation error
         eps = self.generate_observation_noise(
-            n, seed=seed, verbose_level=verbose_level - 1
+            n,
+            seed=seed,
         )
         residual_noisy = residuals + eps
 
         # Update in canonical parametrization
         canonical_updated = self.update_canonical(
-            canonical, residual_noisy, d, verbose_level=verbose_level - 1
+            canonical,
+            residual_noisy,
+            d,
         )
 
         # Bring realizations back
@@ -195,7 +196,6 @@ class EnIF:
             update_indices=update_indices,
             U_prior=U,
             iterative=iterative,
-            verbose_level=verbose_level - 1,
         )
 
     # Low-level API methods
@@ -203,7 +203,6 @@ class EnIF:
         self,
         U: NDArray[np.floating],
         ordering_method: str = "metis",
-        verbose_level: int = 0,
     ) -> None:
         """
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
@@ -218,7 +217,6 @@ class EnIF:
         ) = fit_precision_cholesky(
             U=U,
             Graph_u=self.Graph_u,
-            verbose_level=verbose_level - 1,
             ordering_method=ordering_method,
         )
         self._validate_sparse_2d("Prec_u", self.Prec_u, square=True)
@@ -228,7 +226,6 @@ class EnIF:
         U: NDArray[np.floating],
         Y: NDArray[np.floating],
         learning_algorithm: Literal["LASSO", "influence-boost"] = "LASSO",
-        verbose_level: int = 0,
     ) -> None:
         """
         Estimate H from data U using (sparse) linear regression
@@ -240,32 +237,35 @@ class EnIF:
             )
 
         if learning_algorithm == "LASSO":
-            self.H = lr.linear_l1_regression(U, Y, verbose_level=verbose_level - 1)
+            self.H = lr.linear_l1_regression(
+                U,
+                Y,
+            )
         else:
             self.H = lr.linear_boost_ic_regression(
-                U, Y, verbose_level=verbose_level - 1
+                U,
+                Y,
             )
         self._validate_sparse_2d("H", self.H)
 
         self.unexplained_variance = lr.residual_variance(
-            U, Y, self.H, verbose_level=verbose_level - 1
+            U,
+            Y,
+            self.H,
         )
 
-    def pushforward_to_canonical(
-        self, U: NDArray[np.floating], verbose_level: int = 0
-    ) -> NDArray[np.floating]:
+    def pushforward_to_canonical(self, U: NDArray[np.floating]) -> NDArray[np.floating]:
         """
         Map each realization u in U to canonical space eta = Prec * u
         """
-        if verbose_level > 0:
-            print("Mapping realizations to canonical space")
+        log.info("Mapping realizations to canonical space")
 
         assert self.Prec_u is not None, "Precision must exist to pushforward"
         Eta = U @ self.Prec_u
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
-    def Prec_residual_noisy(self, verbose_level: int = 0) -> sparray:
+    def Prec_residual_noisy(self) -> sparray:
         if self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
 
@@ -275,34 +275,44 @@ class EnIF:
         assert Prec_r.shape == self.Prec_eps.shape, (
             "Residuals and noise precision should have same shape"
         )
-        if verbose_level > 0:
-            print(
-                f"Total residual variance: {np.sum(residual_noisy_var)}\n"
-                f"Unexplained variance: {np.sum(self.unexplained_variance)}\n"
-                f"Measurement variance: {np.sum(eps_variances)}"
-            )
+
+        log.info("Total residual variance: %.4f", np.sum(residual_noisy_var))
+        log.info("Unexplained variance: %.4f", np.sum(self.unexplained_variance))
+        log.info("Measurement variance: %.4f", np.sum(eps_variances))
         return Prec_r
 
     def response_residual(
-        self, U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
+        self,
+        U: NDArray[np.floating],
+        Y: NDArray[np.floating],
     ) -> NDArray[np.floating]:
         """Residual from regression self.H for Y on U"""
         if self.H is None:
             raise ValueError("H is not set.")
 
         self.unexplained_variance = lr.residual_variance(
-            U, Y, self.H, verbose_level=verbose_level - 1
+            U,
+            Y,
+            self.H,
         )
 
-        return lr.response_residual(U, Y, self.H, verbose_level=verbose_level - 1)
+        return lr.response_residual(
+            U,
+            Y,
+            self.H,
+        )
 
     def generate_observation_noise(
-        self, n: int, seed: int | None = None, verbose_level: int = 0
+        self,
+        n: int,
+        seed: int | None = None,
     ) -> NDArray[np.floating]:
         """Sample n realizations of observation noise."""
 
         return generate_gaussian_noise(
-            n, self.Prec_eps, seed=seed, verbose_level=verbose_level - 1
+            n,
+            self.Prec_eps,
+            seed=seed,
         )
 
     def update_canonical(
@@ -310,7 +320,6 @@ class EnIF:
         canonical: NDArray[np.floating],
         residual_noisy: NDArray[np.floating],
         d: NDArray[np.floating],
-        verbose_level: int = 0,
     ) -> NDArray[np.floating]:
         """
         Use information-filter equations to update (eta, Prec) using perturbed
@@ -324,13 +333,14 @@ class EnIF:
         assert n == n_r, "canonical and residual_noisy must have equal samples"
         assert d.shape == (m,), "d and residual_noisy must have matching dimension"
 
-        if verbose_level > 5:
+        # Only print this if logging is on. Cholesky can be heavy
+        if log.isEnabledFor(logging.INFO):
             chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            prior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
-            print(f"Prior precision log-determinant: {prior_logdet}")
+            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+            log.info("Prior precision log-determinant: %.3f", logdet_value)
 
         updated_canonical = canonical.copy()
-        Prec_r = self.Prec_residual_noisy(verbose_level=verbose_level - 1)
+        Prec_r = self.Prec_residual_noisy()
         for i in range(n):
             d_adjusted = d - residual_noisy[i, :]
             # Eqn (46) from the paper
@@ -339,16 +349,14 @@ class EnIF:
         # posterior precision
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
-        # Only print this if one really wants it. The cholesky can be heavy
-        if verbose_level > 5:
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            posterior_logdet = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
-            print(f"Posterior precision log-determinant: {posterior_logdet}")
+        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+        logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+        log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
-            # Update the ordering knowledge
-            self.Graph_C, self.perm_compose, self.P_rev, self.P_order = (
-                find_sparsity_structure_from_chol(chol_LLT=chol_LLT)
-            )
+        # Update the ordering knowledge
+        self.Graph_C, self.perm_compose, self.P_rev, self.P_order = (
+            find_sparsity_structure_from_chol(chol_LLT=chol_LLT)
+        )
 
         return updated_canonical
 
@@ -358,7 +366,6 @@ class EnIF:
         update_indices: NDArray[np.integer] | None = None,
         U_prior: NDArray[np.floating] | None = None,
         iterative: bool = False,
-        verbose_level: int = 0,
     ) -> NDArray[np.floating]:
         """
         Solve u = Prec * eta using selective updates for specified indices,
@@ -367,8 +374,7 @@ class EnIF:
         """
         assert self.Prec_u is not None, "Prec_u must exist"
 
-        if verbose_level > 0:
-            print("Mapping canonical-scaled realizations to moment realization")
+        log.info("Mapping canonical-scaled realizations to moment realization")
 
         p = updated_canonical.shape[1]  # Number of columns in the matrix
         all_indices = np.arange(p, dtype=int)
@@ -424,7 +430,6 @@ class EnIF:
     def get_update_indices(
         self,
         neighbor_propagation_order: int = 10,
-        verbose_level: int = 0,
     ) -> NDArray[np.integer]:
         """
         Determine indices to update based on the order of neighbor propagation.
@@ -460,11 +465,8 @@ class EnIF:
             all_nodes.update(new_nodes)
             current_nodes = new_nodes.copy()
 
-        if verbose_level > 0:
-            print(
-                f"Retrieving {len(all_nodes)} parameters out of a total "
-                f"{adjacency.shape[0]}"
-            )
+        param_num, tot_num = len(all_nodes), adjacency.shape[0]
+        log.info("Retrieving %d parameters out of %d", param_num, tot_num)
 
         return np.array(list(all_nodes), dtype=int)
 

@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import scipy.sparse as sp
 from joblib import Parallel, delayed
@@ -9,9 +11,12 @@ from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
+
 
 def linear_l1_regression(
-    U: NDArray[np.floating], Y: NDArray[np.floating], verbose_level: int = 0
+    U: NDArray[np.floating], Y: NDArray[np.floating]
 ) -> sp.csc_array:
     """Performs LASSO regression for each response in Y against predictors in
     U, constructing a sparse matrix of regression coefficients.
@@ -41,8 +46,7 @@ def linear_l1_regression(
     if n != n_y:
         raise ValueError("Number of samples in U and Y must be the same")
 
-    if verbose_level > 0:
-        print(f"Learning sparse linear map of shape {(m, p)}")
+    log.info("Learning sparse linear map of shape %s", (m, p))
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -77,12 +81,9 @@ def linear_l1_regression(
 
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
-    if verbose_level > 0:
-        print(
-            f"Total elements: {m * p}\n"
-            f"Non-zero elements: {H_sparse.nnz}\n"
-            f"Fraction of non-zeros: {H_sparse.nnz / (m * p)}"
-        )
+    log.info(
+        "Density: %.1f%% (%d / %d)", 100 * H_sparse.nnz / (m * p), H_sparse.nnz, m * p
+    )
 
     return H_sparse
 
@@ -227,7 +228,6 @@ def linear_boost_ic_regression(
     Y: NDArray[np.floating],
     learning_rate: float = 0.5,
     effective_dimension: int | None = None,
-    verbose_level: int = 0,
     n_jobs: int = -1,
 ) -> sp.csc_array:
     """Performs boosted linear regression for each response in Y against
@@ -261,8 +261,7 @@ def linear_boost_ic_regression(
     if n != n_y:
         raise ValueError("Number of samples in U and Y must be the same")
 
-    if verbose_level > 0:
-        print(f"Learning sparse linear map of shape {(m, p)}")
+    log.info("Learning sparse linear map of shape %s", (m, p))
 
     scaler_u = StandardScaler()
     U_scaled = scaler_u.fit_transform(U)
@@ -296,12 +295,9 @@ def linear_boost_ic_regression(
     # Assert shape of H_sparse
     assert H_sparse.shape == (m, p), "Shape of H_sparse must be (m, p)"
 
-    if verbose_level > 0:
-        print(
-            f"Total elements: {m * p}\n"
-            f"Non-zero elements: {H_sparse.nnz}\n"
-            f"Fraction of non-zeros: {H_sparse.nnz / (m * p)}"
-        )
+    log.info(
+        "Density: %.1f%% (%d / %d)", 100 * H_sparse.nnz / (m * p), H_sparse.nnz, m * p
+    )
 
     return H_sparse
 
@@ -310,7 +306,6 @@ def response_residual(
     U: NDArray[np.floating],
     Y: NDArray[np.floating],
     H: sparray,
-    verbose_level: int = 0,
 ) -> NDArray[np.floating]:
     """Residual from regression H for Y on U"""
     n_u, p = U.shape
@@ -318,8 +313,7 @@ def response_residual(
     assert n_u == n_y, "Number of ensembles must be the same"
     assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
 
-    if verbose_level > 0:
-        print("Calculating response residuals")
+    log.info("Calculating response residuals")
 
     return Y - U @ H.T
 
@@ -328,7 +322,6 @@ def residual_variance(
     U: NDArray[np.floating],
     Y: NDArray[np.floating],
     H: sparray,
-    verbose_level: int = 0,
 ) -> NDArray[np.floating]:
     """Variance in Y not explained by U through H"""
 
@@ -344,8 +337,7 @@ def residual_variance(
         "Number of variance components must match number of observations"
     )
 
-    if verbose_level > 0:
-        print("Calculating unexplained variance")
+    log.info("Calculating unexplained variance")
 
     return unexplained_variance
 
