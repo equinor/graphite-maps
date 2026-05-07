@@ -254,9 +254,7 @@ class EnIF:
             self.H,
         )
 
-    def pushforward_to_canonical(
-        self, U: NDArray[np.floating], verbose_level: int = 0
-    ) -> NDArray[np.floating]:
+    def pushforward_to_canonical(self, U: NDArray[np.floating]) -> NDArray[np.floating]:
         """
         Map each realization u in U to canonical space eta = Prec * u
         """
@@ -267,7 +265,7 @@ class EnIF:
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
-    def Prec_residual_noisy(self, verbose_level: int = 0) -> sparray:
+    def Prec_residual_noisy(self) -> sparray:
         if self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
 
@@ -368,7 +366,6 @@ class EnIF:
         update_indices: NDArray[np.integer] | None = None,
         U_prior: NDArray[np.floating] | None = None,
         iterative: bool = False,
-        verbose_level: int = 0,
     ) -> NDArray[np.floating]:
         """
         Solve u = Prec * eta using selective updates for specified indices,
