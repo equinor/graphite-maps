@@ -1,4 +1,6 @@
 name: Build and test Linux
+permissions:
+  contents: read
 
 on:
  push:

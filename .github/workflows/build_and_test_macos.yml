@@ -1,4 +1,6 @@
 name: Build and test MacOS
+permissions:
+  contents: read
 
 on:
  push:
