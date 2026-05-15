@@ -256,12 +256,12 @@ class EnIF:
 
     def pushforward_to_canonical(self, U: NDArray[np.floating]) -> NDArray[np.floating]:
         """
-        Map each realization u in U to canonical space eta = Prec * u
+        Map each realization u in U to canonical space: eta = u @ Prec
         """
         log.info("Mapping realizations to canonical space")
 
         assert self.Prec_u is not None, "Precision must exist to pushforward"
-        Eta = U @ self.Prec_u
+        Eta = U @ self.Prec_u  # Shapes: (r, param) = (r, param) @ (param, param)
         assert Eta.shape == U.shape, "Eta preserves the shape of U"
         return Eta
 
@@ -368,64 +368,85 @@ class EnIF:
         iterative: bool = False,
     ) -> NDArray[np.floating]:
         """
-        Solve u = Prec * eta using selective updates for specified indices,
-        taking into account previously calculated values of U_prior where
-        appropriate.
+        Solve the equation Eta = U @ Prec_u for unknown U.
+
+        The suppose we wish to solve the matrix equation N = P @ U,
+        but only some of the rows in U are to be solved for. Call these "s".
+        Partitioning the matrix, we obtain
+          | P_1s  P_1 | @ | u_s |    =  | n_s |
+          | P_2s  P_2 |   | u   |       | n   |
+        Focusing on the values u_s, we obtain the system
+          P_1s @ u_s + P_1 @ u = n_s
+        Which we solve for u_s:
+            P_1s @ u_s = n_s - P_1 @ u
+
+        In other words, this method uses selective updates for specified indices,
+        taking into account previously calculated values of U_prior.
+
+        Parameters
+        ----------
+        updated_canonical : NDArray[np.floating]
+            The eta-matrix of shape (realizations, parameters).
+        update_indices : NDArray[np.integer] | None, optional
+            Indices to update (columns/params in U). The default is None (update all).
+        U_prior : NDArray[np.floating] | None, optional
+            Values in U used for indices that are not updated. The default is None.
+        iterative : bool, optional
+            Whether to use iterative solver or not. The default is False.
+
+        Returns
+        -------
+        U : NDArray[np.floating]
+            Array of shape (realizations, parameters), updated in columns
+            `update_indices`. The remaining columns are copied from `U_prior`.
         """
         assert self.Prec_u is not None, "Prec_u must exist"
+        assert update_indices is None or np.issubdtype(update_indices.dtype, np.integer)
+        assert (update_indices is None) >= (U_prior is None), (
+            "Must pass U_prior if update_indices"
+        )
 
-        log.info("Mapping canonical-scaled realizations to moment realization")
+        log.info(
+            "Mapping canonical-scaled realizations (Eta) to moment realization (U)"
+        )
 
-        p = updated_canonical.shape[1]  # Number of columns in the matrix
-        all_indices = np.arange(p, dtype=int)
-        if update_indices is None:
-            update_indices = all_indices
-        else:
-            update_indices = update_indices.astype(int)
+        # Indices to solve for 's' and complementary set 'not_s'
+        all_indices = np.arange(updated_canonical.shape[1], dtype=int)
+        s = all_indices if (update_indices is None) else update_indices
+        assert s is not None
+        not_s = np.setdiff1d(all_indices, s)
 
-        assert update_indices is not None
-        unchanged_indices = np.setdiff1d(all_indices, update_indices)
+        U = np.zeros(updated_canonical.shape) if (U_prior is None) else U_prior.copy()
+        if s.size == 0:
+            return U
 
-        updated_moment: NDArray[np.floating]
-        if U_prior is None:
-            updated_moment = np.zeros(updated_canonical.shape)
-        else:
-            updated_moment = U_prior.copy()
+        P_ss = self.Prec_u[np.ix_(s, s)]
+        P_s_not_s = self.Prec_u[np.ix_(s, not_s)]
 
-        if update_indices.size == 0:
-            return updated_moment
-
-        A33 = self.Prec_u[update_indices, :][:, update_indices]
-
+        # === Iterative solution ===
         if iterative:
-            for i in tqdm(
-                range(updated_moment.shape[0]),
-                desc="Mapping data to moment parametrisation realization-by-realization",
-            ):
-                if unchanged_indices.size > 0:
-                    A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
-                    Y32 = updated_canonical[i, update_indices] - A32.dot(
-                        updated_moment[i, unchanged_indices]
-                    )
+            desc = "Mapping data to moment parametrisation realization-by-realization"
+
+            for i in tqdm(range(U.shape[0]), desc=desc):
+                if not_s.size > 0:
+                    rhs = updated_canonical[i, s] - P_s_not_s @ U[i, not_s]
                 else:
-                    Y32 = updated_canonical[i, update_indices]
+                    rhs = updated_canonical[i, s]
 
-                x_updated, _ = bicgstab(A33, Y32)
-                updated_moment[i, update_indices] = x_updated
+                x_updated, _ = bicgstab(P_ss, rhs)
+                U[i, s] = x_updated
+
+            return U
+
+        # === Cholesky solution ===
+        chol_LLT = cholesky(P_ss, ordering_method="metis")
+        if not_s.size > 0:
+            rhs = updated_canonical[:, s].T - P_s_not_s @ U[:, not_s].T
         else:
-            chol_LLT = cholesky(A33, ordering_method="metis")
-            if unchanged_indices.size > 0:
-                A32 = self.Prec_u[update_indices, :][:, unchanged_indices]
-                Y32 = updated_canonical[:, update_indices].T - A32.dot(
-                    updated_moment[:, unchanged_indices].T
-                )
-            else:
-                Y32 = updated_canonical[:, update_indices].T
+            rhs = updated_canonical[:, s].T
 
-            X32 = chol_LLT.solve_A(Y32).T
-            updated_moment[:, update_indices] = X32
-
-        return updated_moment
+        U[:, s] = chol_LLT.solve_A(rhs).T
+        return U
 
     def get_update_indices(
         self,
