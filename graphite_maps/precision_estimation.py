@@ -444,10 +444,8 @@ def fit_precision_cholesky_approximate(
         G=G_expanded,
         use_tqdm=use_tqdm,
     )
-
     Prec_approx = C.T @ C
-
-    return Prec_approx
+    return Prec_approx.tocsc()
 
 
 if __name__ == "__main__":
