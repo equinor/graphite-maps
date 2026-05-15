@@ -402,7 +402,7 @@ class EnIF:
         """
         assert self.Prec_u is not None, "Prec_u must exist"
         assert update_indices is None or np.issubdtype(update_indices.dtype, np.integer)
-        assert (update_indices is None) != (U_prior is None), "Pass both or neither"
+        assert (update_indices is None) == (U_prior is None), "Pass both or neither"
 
         log.info(
             "Mapping canonical-scaled realizations (Eta) to moment realization (U)"
