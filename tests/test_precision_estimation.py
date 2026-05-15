@@ -1,3 +1,4 @@
+import networkx as nx
 import numpy as np
 import pytest
 import scipy as sp
@@ -53,6 +54,48 @@ def test_closed_form_matches_iterative_solver():
 
     np.testing.assert_allclose(off_diag_cf, off_diag_iter, rtol=1e-4, atol=1e-6)
     np.testing.assert_allclose(diag_cf, diag_iter, rtol=1e-4)
+
+
+def test_fit_precision_cholesky_approximate_two_hop_recovers_fill_in():
+    rng = np.random.default_rng(42)
+    n = 50000
+
+    # The true precision is sparse on the 4-cycle, but its Cholesky factor in
+    # the natural ordering contains fill-in: entries that become nonzero in
+    # the factor even though the corresponding precision entry is zero. In
+    # this example, C[2, 0] is such a fill-in term, needed so that C.T @ C
+    # matches the true precision. A 1-hop neighborhood cannot represent that
+    # term, while a 2-hop expansion can, so the 2-hop fit should be much more
+    # accurate.
+    prec_true = np.array(
+        [
+            [2.0, -0.4, 0.0, -0.3],
+            [-0.4, 2.0, -0.5, 0.0],
+            [0.0, -0.5, 2.0, -0.6],
+            [-0.3, 0.0, -0.6, 2.0],
+        ]
+    )
+    cov_true = np.linalg.inv(prec_true)
+    U = rng.multivariate_normal(np.zeros(4), cov_true, size=n)
+    G = nx.cycle_graph(4)
+
+    prec_1_hop = precest.fit_precision_cholesky_approximate(
+        U=U, G=G, neighbourhood_expansion=1, use_tqdm=False
+    ).toarray()
+    prec_2_hop = precest.fit_precision_cholesky_approximate(
+        U=U, G=G, neighbourhood_expansion=2, use_tqdm=False
+    ).toarray()
+
+    # Without the 2-hop expansion, the solver cannot represent the fill-in and
+    # leaks a spurious (0, 2) precision entry.
+    assert abs(prec_1_hop[0, 2]) > 0.07
+    assert abs(prec_2_hop[0, 2]) < 0.02
+
+    err_1_hop = np.max(np.abs(prec_1_hop - prec_true))
+    err_2_hop = np.max(np.abs(prec_2_hop - prec_true))
+    assert err_1_hop > err_2_hop
+    assert err_1_hop > 0.07
+    assert err_2_hop < 0.03
 
 
 if __name__ == "__main__":
