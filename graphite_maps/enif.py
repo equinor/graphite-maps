@@ -339,14 +339,15 @@ class EnIF:
             logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
-        updated_canonical = canonical.copy()
         Prec_r = self.Prec_residual_noisy()
-        for i in range(n):
-            d_adjusted = d - residual_noisy[i, :]
-            # Eqn (46) from the paper
-            updated_canonical[i, :] += self.H.T @ Prec_r @ d_adjusted
 
-        # posterior precision
+        # posterior canonical params
+        # this is equation (46), but transposed to update each row (realizations)
+        # Equivalent to:
+        # upd_eta[i, :] = eta[i, :] + self.H.T @ Prec_r @ (d - residual_noisy[i, :])
+        updated_canonical = canonical + (d - residual_noisy) @ Prec_r.T @ self.H
+
+        # posterior precision, equation (47)
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
         chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
