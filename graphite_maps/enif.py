@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from graphite_maps import linear_regression as lr
 from graphite_maps.precision_estimation import (
-    find_sparsity_structure_from_chol,
     fit_precision_cholesky,
 )
 from graphite_maps.utils import generate_gaussian_noise
@@ -75,12 +74,6 @@ class EnIF:
         self.Prec_eps = Prec_eps
         self.H = H
         self.unexplained_variance: NDArray[np.floating] | None = None
-
-        # Convenience for re-use of cholesky and ordering
-        self.Graph_C: nx.Graph | None = None
-        self.perm_compose: NDArray[np.integer] | None = None
-        self.P_rev: sparray | None = None
-        self.P_order: sparray | None = None
 
     def fit(
         self,
@@ -208,13 +201,7 @@ class EnIF:
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
         """
         assert self.Graph_u is not None, "Graph_u must be set to fit precision"
-        (
-            self.Prec_u,
-            self.Graph_C,
-            self.perm_compose,
-            self.P_rev,
-            self.P_order,
-        ) = fit_precision_cholesky(
+        (self.Prec_u, *_) = fit_precision_cholesky(
             U=U,
             Graph_u=self.Graph_u,
             ordering_method=ordering_method,
@@ -353,11 +340,6 @@ class EnIF:
         logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
         log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
-        # Update the ordering knowledge
-        self.Graph_C, self.perm_compose, self.P_rev, self.P_order = (
-            find_sparsity_structure_from_chol(chol_LLT=chol_LLT)
-        )
-
         return updated_canonical
 
     def pullback_from_canonical(
@@ -490,16 +472,6 @@ class EnIF:
         log.info("Retrieving %d parameters out of %d", param_num, tot_num)
 
         return np.array(list(all_nodes), dtype=int)
-
-    @property
-    def C_structure_exists(self) -> bool:
-        """Check if information from permuted Cholesky decomposition exists"""
-        return not (
-            self.Graph_C is None
-            or self.perm_compose is None
-            or self.P_rev is None
-            or self.P_order is None
-        )
 
 
 if __name__ == "__main__":
