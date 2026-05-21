@@ -1,3 +1,61 @@
+"""
+Linear regression
+-----------------
+The purpose of these functions is to learn a sparse mapping from predictors X
+to responses y. There are three requirements:
+    1. The method must be accurate (a good, predictive model)
+    2. The method must be fast (our data is large, with high dimensionality p >> N)
+    3. The method must produce sparse results (for interpretability)
+
+>>> import numpy as np
+>>> from sklearn.datasets import make_regression
+>>> from sklearn.model_selection import train_test_split
+>>> (X_full, y_full, coef) = make_regression(n_samples=100, n_features=1000, n_informative=10,
+...                                          noise=0.3, coef=True, random_state=1)
+>>> (~np.isclose(coef, 0.0)).sum()
+np.int64(10)
+
+>>> X, X_test, y, y_test = train_test_split(X_full, y_full, test_size=0.5, random_state=2)
+
+Let us see how many non-zero coefficients sklearn finds:
+
+>>> H_sparse_l1 = linear_l1_regression(U=X, Y=y[:, None])
+>>> coef_ = H_sparse_l1.todense().ravel()
+>>> (~np.isclose(coef_, 0.0)).sum()
+np.int64(54)
+
+Let us check our own Lasso-like boosting algorithm:
+
+>>> H_sparse_ic = linear_boost_ic_regression(U=X, Y=y[:, None])
+>>> coef_ = H_sparse_ic.todense().ravel()
+>>> (~np.isclose(coef_, 0.0)).sum()
+np.int64(5)
+
+Let us check RMSE on the test set for our models:
+
+>>> from sklearn.metrics import mean_squared_error
+>>> y_pred = X_test @ H_sparse_l1.todense().ravel()
+>>> float(np.sqrt(mean_squared_error(y_true=y_test, y_pred=y_pred)))
+135.61...
+
+>>> y_pred = X_test @ H_sparse_ic.todense().ravel()
+>>> float(np.sqrt(mean_squared_error(y_true=y_test, y_pred=y_pred)))
+116.06...
+
+With the true coefficients, the RMSE is 100x smaller. This highlights
+how hard it is to infer coefficients when p >> N.
+
+>>> y_pred = X_test @ coef
+>>> float(np.sqrt(mean_squared_error(y_true=y_test, y_pred=y_pred)))
+0.24...
+
+Still beat the dummy model though:
+
+>>> y_pred = np.mean(y) * np.ones_like(y_test)
+>>> float(np.sqrt(mean_squared_error(y_true=y_test, y_pred=y_pred)))
+213.48...
+"""
+
 import logging
 
 import numpy as np
@@ -122,6 +180,7 @@ def calculate_influence(
 def boost_linear_regression(
     X: NDArray[np.floating],
     y: NDArray[np.floating],
+    *,
     learning_rate: float = 0.5,
     tol: float = 1e-6,
     max_iter: int = 10000,
@@ -225,6 +284,7 @@ def _fit_single_response_boost(
 def linear_boost_ic_regression(
     U: NDArray[np.floating],
     Y: NDArray[np.floating],
+    *,
     learning_rate: float = 0.5,
     effective_dimension: int | None = None,
     n_jobs: int = -1,
@@ -271,7 +331,11 @@ def linear_boost_ic_regression(
     # Fit responses in parallel
     results = Parallel(n_jobs=n_jobs)(
         delayed(_fit_single_response_boost)(
-            j, U_scaled, Y_scaled[:, j], learning_rate, effective_dimension
+            j=j,
+            U_scaled=U_scaled,
+            y_j=Y_scaled[:, j],
+            learning_rate=learning_rate,
+            effective_dimension=effective_dimension,
         )
         for j in tqdm(range(m), desc="Learning sparse linear map for each response")
     )
@@ -280,7 +344,7 @@ def linear_boost_ic_regression(
     i_H, j_H, values_H = [], [], []
     for j, nonzero_indices, nonzero_values in results:
         k = len(nonzero_indices)
-        i_H.append(np.full(k, j, dtype=np.intp))
+        i_H.append(np.full(shape=k, fill_value=j, dtype=np.intp))
         j_H.append(nonzero_indices)
         values_H.append(
             scaler_y.scale_[j] * nonzero_values / scaler_u.scale_[nonzero_indices]
