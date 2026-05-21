@@ -5,7 +5,6 @@ import scipy.sparse as sp
 from joblib import Parallel, delayed
 from numpy.typing import NDArray
 from scipy.integrate import quad
-from scipy.sparse import sparray
 from scipy.stats import chi2
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
@@ -300,46 +299,6 @@ def linear_boost_ic_regression(
     )
 
     return H_sparse
-
-
-def response_residual(
-    U: NDArray[np.floating],
-    Y: NDArray[np.floating],
-    H: sparray,
-) -> NDArray[np.floating]:
-    """Residual from regression H for Y on U"""
-    n_u, p = U.shape
-    n_y, m = Y.shape
-    assert n_u == n_y, "Number of ensembles must be the same"
-    assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
-
-    log.info("Calculating response residuals")
-
-    return Y - U @ H.T
-
-
-def residual_variance(
-    U: NDArray[np.floating],
-    Y: NDArray[np.floating],
-    H: sparray,
-) -> NDArray[np.floating]:
-    """Variance in Y not explained by U through H"""
-
-    n_u, p = U.shape
-    n_y, m = Y.shape
-    assert n_u == n_y, "Number of ensembles must be the same"
-    assert (m, p) == H.shape, "Coefficients in H must match U and Y dimensions"
-
-    R = response_residual(U, Y, H)
-    unexplained_variance = np.var(R, axis=0)
-
-    assert unexplained_variance.shape == (m,), (
-        "Number of variance components must match number of observations"
-    )
-
-    log.info("Calculating unexplained variance")
-
-    return unexplained_variance
 
 
 if __name__ == "__main__":
