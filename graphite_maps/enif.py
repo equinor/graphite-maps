@@ -235,11 +235,8 @@ class EnIF:
             )
         self._validate_sparse_2d("H", self.H)
 
-        self.unexplained_variance = lr.residual_variance(
-            U,
-            Y,
-            self.H,
-        )
+        # Sets the `unexplained_variance` attribute on self
+        self.response_residual(U=U, Y=Y)
 
     def pushforward_to_canonical(self, U: NDArray[np.floating]) -> NDArray[np.floating]:
         """
@@ -273,21 +270,25 @@ class EnIF:
         U: NDArray[np.floating],
         Y: NDArray[np.floating],
     ) -> NDArray[np.floating]:
-        """Residual from regression self.H for Y on U"""
+        """Residual from regression self.H for Y on U: Y - U @ H.T"""
         if self.H is None:
             raise ValueError("H is not set.")
 
-        self.unexplained_variance = lr.residual_variance(
-            U,
-            Y,
-            self.H,
+        assert Y.shape[0] == U.shape[0], (
+            "Number of realizations (ensemble members) must be equal"
         )
+        assert U.shape[1] == self.H.shape[1], "Shape mismatch"
+        assert Y.shape[1] == self.H.shape[0], "Shape mismatch"
 
-        return lr.response_residual(
-            U,
-            Y,
-            self.H,
-        )
+        log.info("Calculating response residuals")
+        # Has shape (realizations, responses)
+        response_residuals = Y - U @ self.H.T
+
+        # Unexplained variance for each response
+        log.info("Calculating unexplained variance")
+        self.unexplained_variance = np.var(response_residuals, axis=0, ddof=0)
+
+        return response_residuals
 
     def generate_observation_noise(
         self,
