@@ -392,7 +392,7 @@ def optimize_sparse_affine_kr_map(
     sigma = U.std(axis=0)
     U_std = (U - mu) / sigma[None, :]
 
-    C_full = sp.lil_array((p, p))  # # lil_array for efficient row operations
+    C_full = sp.lil_array((p, p))  # lil_array for efficient row operations
     loop_function = (
         tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
         if use_tqdm
@@ -405,7 +405,7 @@ def optimize_sparse_affine_kr_map(
         # Extract the reduced version of U
         U_reduced = U_std[:, non_zero_indices]
 
-        # # Optimization for reduced C_k
+        # Optimization for reduced C_k
         lambda_l2_aic = 2.0 * len(non_zero_indices)
         off_diag_std, diag_value_std = solve_row_closed_form(
             U_reduced=U_reduced,
