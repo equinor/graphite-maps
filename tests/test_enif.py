@@ -97,6 +97,44 @@ def test_snapshot_highlevel():
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
 
 
+@pytest.mark.parametrize("seed", range(10))
+def test_affine_invariance(seed):
+    rng = np.random.default_rng(seed)
+    n_params, n_responses, n_ensemble = 50, 25, 10
+
+    # Create data
+    Graph_u = nx.binomial_graph(n_params, p=0.2, seed=42)
+    Prec_eps = sp.sparse.csc_array(np.diag(np.logspace(-2, 2, num=n_responses)))
+    H_true = sp.sparse.csc_array(rng.normal(size=(n_responses, n_params)))
+    U = rng.normal(size=(n_ensemble, n_params)) * 3 + 7
+    Y = U @ H_true.T
+    d = np.mean(Y, axis=0)
+
+    def run(U_in):
+        # Estimate H
+        H = linear_boost_ic_regression(U=U_in, Y=Y)
+        # Estimate precision matrix
+        Prec_u = fit_precision_cholesky_approximate(
+            U=U_in,
+            G=Graph_u,
+            use_tqdm=False,
+        )
+        enif = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
+        idx = enif.get_update_indices(neighbor_propagation_order=15)
+        return enif.transport(U=U_in, Y=Y, d=d, update_indices=idx, seed=seed)
+
+    # Posterior parameters with no transformation
+    X_raw = run(U)
+
+    # Standardize parameters, run EnIF, then transform back
+    mu = U.mean(axis=0, keepdims=True)
+    sigma = U.std(axis=0, keepdims=True)
+    X_std = run((U - mu) / sigma) * sigma + mu
+
+    # Verify that we get the same answer
+    np.testing.assert_allclose(X_raw, X_std)
+
+
 def test_snapshot_lowlevel():
     """Test calling the API using some low level functions.
     This mimics the usage in:
