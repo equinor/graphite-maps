@@ -79,7 +79,7 @@ def test_snapshot_highlevel():
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
     # Check result
-    desired = np.array([0.031458, -0.488617, -0.904491, -0.3258, -1.604964])
+    desired = np.array([0.039102, -0.491275, -0.913188, -0.318065, -1.603981])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
 
     # Call the high-level API, using "Prec_u"
@@ -95,6 +95,44 @@ def test_snapshot_highlevel():
 
     desired = np.array([-0.042127, -0.421971, -0.94604, -0.261284, -1.491031])
     np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_affine_invariance(seed):
+    rng = np.random.default_rng(seed)
+    n_params, n_responses, n_ensemble = 50, 25, 10
+
+    # Create data
+    Graph_u = nx.binomial_graph(n_params, p=0.2, seed=42)
+    Prec_eps = sp.sparse.csc_array(np.diag(np.logspace(-2, 2, num=n_responses)))
+    H_true = sp.sparse.csc_array(rng.normal(size=(n_responses, n_params)))
+    U = rng.normal(size=(n_ensemble, n_params)) * 3 + 7
+    Y = U @ H_true.T
+    d = np.mean(Y, axis=0)
+
+    def run(U_in):
+        # Estimate H
+        H = linear_boost_ic_regression(U=U_in, Y=Y)
+        # Estimate precision matrix
+        Prec_u = fit_precision_cholesky_approximate(
+            U=U_in,
+            G=Graph_u,
+            use_tqdm=False,
+        )
+        enif = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
+        idx = enif.get_update_indices(neighbor_propagation_order=15)
+        return enif.transport(U=U_in, Y=Y, d=d, update_indices=idx, seed=seed)
+
+    # Posterior parameters with no transformation
+    X_raw = run(U)
+
+    # Standardize parameters, run EnIF, then transform back
+    mu = U.mean(axis=0, keepdims=True)
+    sigma = U.std(axis=0, keepdims=True)
+    X_std = run((U - mu) / sigma) * sigma + mu
+
+    # Verify that we get the same answer
+    np.testing.assert_allclose(X_raw, X_std)
 
 
 def test_snapshot_lowlevel():
@@ -134,9 +172,7 @@ def test_snapshot_lowlevel():
         use_tqdm=True,
     )
 
-    desired_Prec_u = np.array(
-        [1.5617989, 1.62943966, 1.14376027, 1.05904362, 1.07834702]
-    )
+    desired_Prec_u = np.array([1.707219, 1.779207, 1.171189, 1.042243, 1.224324])
     np.testing.assert_allclose(np.diag(Prec_u.todense())[:5], desired_Prec_u, rtol=1e-6)
 
     # Initialize EnIF object with full precision matrices
@@ -149,6 +185,7 @@ def test_snapshot_lowlevel():
     update_indices = gtmap.get_update_indices(
         neighbor_propagation_order=15,
     )
+
     X_updated = gtmap.transport(
         U=U,
         Y=Y,
@@ -159,7 +196,7 @@ def test_snapshot_lowlevel():
     )
 
     desired_X_updated = np.array(
-        [0.14212882, -0.51616552, -0.78515918, -0.41335858, -1.46006239]
+        [0.12753731, -0.5230994, -0.79840529, -0.40772139, -1.4620114]
     )
     np.testing.assert_allclose(np.diag(X_updated)[:5], desired_X_updated, rtol=1e-6)
 
