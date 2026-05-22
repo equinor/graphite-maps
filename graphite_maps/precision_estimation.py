@@ -296,23 +296,103 @@ def optimize_sparse_affine_kr_map(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix.
+        The data matrix with shape (samples, parameters)
     G : networkx.Graph
         The graph representing the non-zero structure in C.
 
     Returns
     -------
     scipy.sparse.csc_array
-        The optimized sparse Cholesky factor of the precision matrix.
-    """
+        The optimized sparse Cholesky factor C of the precision matrix,
+        such that C.T @ C = Prec.
 
+    Examples
+    --------
+
+    In this example we start with a known precision matrix, generate data,
+    then use that data to try to infer the precision matrix again.
+
+    Create precision matrix Prec:
+
+    >>> import numpy as np
+    >>> import scipy as sp
+    >>> import networkx as nx
+    >>> rng = np.random.default_rng(42)
+    >>> diagonal = np.array([1, 2, 3, 4], dtype=float)
+    >>> Prec = np.diag(diagonal) + np.diag(diagonal[:-1] / 2, k=1)
+    >>> Prec += np.diag(diagonal[:-1] / 2, k=-1)
+    >>> Prec
+    array([[1. , 0.5, 0. , 0. ],
+           [0.5, 2. , 1. , 0. ],
+           [0. , 1. , 3. , 1.5],
+           [0. , 0. , 1.5, 4. ]])
+
+    Sample data U and create corresponding graph G:
+
+    >>> mean = np.ones(Prec.shape[0])
+    >>> cov = np.linalg.inv(Prec)
+    >>> U = rng.multivariate_normal(mean=mean, cov=cov, size=999)
+
+    >>> G_mat = sp.sparse.csc_array((Prec != 0).astype(int))
+    >>> G = nx.from_scipy_sparse_array(G_mat)
+    >>> G.edges
+    EdgeView([(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)])
+
+    Estimate the precision matrix from U and G:
+
+    >>> C = optimize_sparse_affine_kr_map(U=U, G=G, use_tqdm=False).todense()
+    >>> Prec_est = (C.T @ C)
+    >>> Prec_est.round(2) # Estimated precision matrix
+    array([[0.99, 0.46, 0.  , 0.  ],
+           [0.46, 2.  , 1.03, 0.  ],
+           [0.  , 1.03, 3.19, 1.46],
+           [0.  , 0.  , 1.46, 3.69]])
+
+    Demonstrate shift invariance. Notice that we get the same result as above:
+
+    >>> U_shift = U +  np.array([1, 10, 100, 1000])
+    >>> C = optimize_sparse_affine_kr_map(U=U_shift, G=G, use_tqdm=False).todense()
+    >>> (C.T @ C).round(2)
+    array([[0.99, 0.46, 0.  , 0.  ],
+           [0.46, 2.  , 1.03, 0.  ],
+           [0.  , 1.03, 3.19, 1.46],
+           [0.  , 0.  , 1.46, 3.69]])
+
+    Demonstrate affine invariance (shift and scale):
+
+    >>> mu = np.array([5, 2, 3, 1])
+    >>> sigma = np.array([1, 2, 4, 8])
+    >>> U_scaled = (U + mu) * sigma
+    >>> C_scaled = optimize_sparse_affine_kr_map(U=U_scaled, G=G, use_tqdm=False).todense()
+    >>> Prec_est_scaled = (C_scaled.T @ C_scaled)
+    >>> Prec_est_scaled.round(2)
+    array([[0.99, 0.23, 0.  , 0.  ],
+           [0.23, 0.5 , 0.13, 0.  ],
+           [0.  , 0.13, 0.2 , 0.05],
+           [0.  , 0.  , 0.05, 0.06]])
+
+    Notice that this is the same as above:
+
+    >>> Prec_est2 = np.diag(sigma) @ Prec_est_scaled @ np.diag(sigma)
+    >>> (Prec_est2).round(2)
+    array([[0.99, 0.46, 0.  , 0.  ],
+           [0.46, 2.  , 1.03, 0.  ],
+           [0.  , 1.03, 3.19, 1.46],
+           [0.  , 0.  , 1.46, 3.69]])
+    >>> np.allclose(Prec_est, Prec_est2)
+    True
+    """
     log.info("Starting statistical fitting of precision")
 
-    _, p = U.shape
+    n, p = U.shape
+    assert n > 1
 
-    # Initialize a sparse matrix for C_full
-    C_full = sp.lil_array((p, p))  # lil_array for efficient row operations
+    # Standardize data U to have zero mean, unit variance
+    mu = U.mean(axis=0, keepdims=True)
+    sigma = U.std(axis=0)
+    U_std = (U - mu) / sigma[None, :]
 
+    C_full = sp.lil_array((p, p))  # # lil_array for efficient row operations
     loop_function = (
         tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
         if use_tqdm
@@ -323,18 +403,20 @@ def optimize_sparse_affine_kr_map(
         non_zero_indices = [j for j in G.neighbors(k) if j < k] + [k]
 
         # Extract the reduced version of U
-        U_reduced = U[:, non_zero_indices]
+        U_reduced = U_std[:, non_zero_indices]
 
-        # Optimization for reduced C_k
+        # # Optimization for reduced C_k
         lambda_l2_aic = 2.0 * len(non_zero_indices)
-        off_diag, diag_value = solve_row_closed_form(
+        off_diag_std, diag_value_std = solve_row_closed_form(
             U_reduced=U_reduced,
             lambda_l2=lambda_l2_aic,
         )
 
+        # Unscale the row back to original coordinates
         if len(non_zero_indices) > 1:
-            C_full[k, non_zero_indices[:-1]] = off_diag
-        C_full[k, k] = diag_value
+            cols_off = non_zero_indices[:-1]
+            C_full[k, cols_off] = off_diag_std / sigma[cols_off]
+        C_full[k, k] = diag_value_std / sigma[k]
 
     # Convert to csc_array for efficient storage and arithmetic operations
     return C_full.tocsc()
