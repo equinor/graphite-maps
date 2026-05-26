@@ -442,9 +442,10 @@ def fit_precision_cholesky(
 
     Parameters
     ----------
-    U : The data matrix.
-    Graph_u : The graph representing the non-zero structure in the precision
-    matrix.
+    U : np.ndarray
+        The data matrix with shape (samples, parameters)
+    G : networkx.Graph
+        Graph representing non-zero structure in the precision matrix.
 
     Returns
     -------
@@ -455,7 +456,7 @@ def fit_precision_cholesky(
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
     if Graph_C is None or perm_compose is None or P_rev is None or P_order is None:
-        # 1. Find in-fill reducing ordering for C
+        # 1. Find in-fill reducing ordering of cholesky factor C
         Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(
             Graph_u,
             ordering_method=ordering_method,
@@ -499,9 +500,9 @@ def fit_precision_cholesky_approximate(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix.
+        The data matrix with shape (samples, parameters)
     G : networkx.Graph
-        The graph representing the non-zero structure in C.
+        Graph representing non-zero structure in the precision matrix.
     neighbourhood_expansion: int, optional
         The number of hops to the new neighbourhood set
 
