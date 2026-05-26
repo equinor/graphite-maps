@@ -299,6 +299,7 @@ def optimize_sparse_affine_kr_map(
         The data matrix with shape (samples, parameters)
     G : networkx.Graph
         The graph representing the non-zero structure in C.
+        Where C is the Cholesky factor such that C.T @ C = Prev.
 
     Returns
     -------
@@ -333,7 +334,10 @@ def optimize_sparse_affine_kr_map(
     >>> cov = np.linalg.inv(Prec)
     >>> U = rng.multivariate_normal(mean=mean, cov=cov, size=999)
 
-    >>> G_mat = sp.sparse.csc_array((Prec != 0).astype(int))
+    The non-zero structure in the Cholesky factor of the Precision:
+
+    >>> G_mat = np.eye(4) + np.diag(np.ones(3), k=-1)
+    >>> G_mat = sp.sparse.csc_array(G_mat.astype(int))
     >>> G = nx.from_scipy_sparse_array(G_mat)
     >>> G.edges
     EdgeView([(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)])
