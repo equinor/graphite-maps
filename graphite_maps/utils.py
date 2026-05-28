@@ -39,25 +39,29 @@ def generate_gaussian_noise(
 
     >>> Prec = sp.sparse.diags_array(Prec.diagonal())
     >>> generate_gaussian_noise(n=3, Prec=Prec, seed=2).round(2)
-    array([[ 0.19, -1.6 , -0.14, -0.19, -0.08, -0.02],
-           [-0.52,  1.18,  0.32,  0.34, -0.2 ,  0.09],
-           [-0.41,  0.75,  0.12, -0.11,  0.11, -0.1 ]])
+    array([[ 0.19, -0.34, -0.17, -0.84,  0.45,  0.2 ],
+           [-0.33,  0.51,  0.12, -0.19,  0.24, -0.05],
+           [-0.33, -0.52,  0.19, -0.03,  0.14, -0.1 ]])
     """
     if n < 1:
         raise ValueError(f"`n` should be g.e. 1, got {n}")
 
     m = Prec.shape[0]
     rng = np.random.default_rng(seed)
-    z = rng.normal(size=(m, n))
 
     # If precision matrix is diagonal
     row_idx, col_idx, _ = sp.sparse.find(Prec)
     if np.all(row_idx == col_idx):
         # Scale is the standard deviations. diag(Prec) = 1 / variances
         scale = np.sqrt(1 / Prec.diagonal())
-        return (z * scale[:, None]).T
+        return rng.normal(
+            loc=0,
+            scale=scale,
+            size=(n, m),
+        )
 
     # General case: precision matrix is not diagonal
+    z = rng.normal(size=(m, n))
 
     # The simplest, but naive, way to sampel is to compute:
     # cov = np.linalg.inv(Prec.todense())
