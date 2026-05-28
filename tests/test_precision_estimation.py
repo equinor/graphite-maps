@@ -66,6 +66,45 @@ def test_snapshot_fit_precision_cholesky_approximate():
     np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
 
 
+@pytest.mark.parametrize("seed", range(99))
+def test_precision_cholesky_roundtrip(seed):
+    """Starting from a known, sparse precision matrix, we generate data,
+    then try to infer the known values from the samples."""
+
+    # Create sparse, pos.def precision matrix
+    rng = np.random.default_rng(seed)
+    n = 25  # Size
+    density = 0.1
+
+    # Create sparse pos def precision matrix
+    F = rng.normal(size=(n, n))
+    F[rng.uniform(size=(n, n)) > density] = 0
+    Prec = F.T @ F + np.eye(n)
+    assert np.all(np.linalg.svd(Prec).S > 0), "Pos def"
+
+    G_matrix = (~np.isclose(Prec, 0.0)).astype(int)
+    Graph_u = nx.from_scipy_sparse_array(sp.sparse.csc_array(G_matrix))
+
+    Cov = np.linalg.inv(Prec)
+    U = rng.multivariate_normal(mean=np.zeros(n), cov=Cov, size=99)
+
+    # Estimate precision using known structure
+    Prec_est, *_ = precest.fit_precision_cholesky(
+        U=U, Graph_u=Graph_u, ordering_method="amd"
+    )
+    Prec_est = Prec_est.todense()
+
+    RMSE = np.sqrt(np.mean((Prec - Prec_est) ** 2))
+
+    # Estimate the naive way - invert the empirical covariance
+    Prec_naive = np.linalg.inv(np.cov(U, rowvar=False))
+    RMSE_naive = np.sqrt(np.mean((Prec - Prec_naive) ** 2))
+
+    # Here 0.77 was chosen to make all tests pass, to easier catch
+    # regressions. Nothing special about the number. Main idea: beat naive!
+    assert RMSE_naive * 0.77 > RMSE
+
+
 def test_objective_twice():
     # A regression test: ensure that two calls return the same result.
     rng = np.random.default_rng(42)
