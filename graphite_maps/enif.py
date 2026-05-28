@@ -344,9 +344,10 @@ class EnIF:
         # posterior precision, equation (47)
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
-        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-        logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
-        log.info("Posterior precision log-determinant: %.3f", logdet_value)
+        if log.isEnabledFor(logging.INFO):
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+            log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
         return updated_canonical
 
