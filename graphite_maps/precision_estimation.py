@@ -29,7 +29,7 @@ def reverse_cholesky(
     C.T @ C == P A P.T, where C is lower-triangular and P is a permutation.
 
     This differs from the standard Cholesky factorization, which computes
-    L @ L.T = P A P.T, where L is lower-triangular.
+    L @ L.T = P @ A @ P.T, where L is lower-triangular.
 
     Returns (C: csc_array, permutation_idx: array). The permutation index
     acts like P on the left when indexing the rows. See examples.
