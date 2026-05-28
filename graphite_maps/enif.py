@@ -169,6 +169,7 @@ class EnIF:
 
         # Work out residuals and associate unexplained variance
         residuals = self.response_residual(U, Y)
+
         # Due to observation error
         eps = self.generate_observation_noise(
             n,
@@ -178,9 +179,9 @@ class EnIF:
 
         # Update in canonical parametrization
         canonical_updated = self.update_canonical(
-            canonical,
-            residual_noisy,
-            d,
+            canonical=canonical,
+            residual_noisy=residual_noisy,
+            d=d,
         )
 
         # Bring realizations back
@@ -327,7 +328,7 @@ class EnIF:
             logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
-        Prec_r = self.Prec_residual_noisy()
+        Prec_r = self.Prec_residual_noisy()  # This is a diagonal matrix
 
         # posterior canonical params
         # this is equation (46), but transposed to update each row (realizations)
