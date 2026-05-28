@@ -28,17 +28,20 @@ def test_snapshot_fit_precision_cholesky():
 
     U, Graph_u, G_matrix = get_precision_data()
 
-    # Estimate precision with fit_precision_cholesky
-    Prec_est, *_ = precest.fit_precision_cholesky(U=U, Graph_u=Graph_u)
+    # Estimate precision with fit_precision_cholesky.
+    # Cannot use METIS (not reproducible across OSes), use 'natural'
+    Prec_est, *_ = precest.fit_precision_cholesky(
+        U=U, Graph_u=Graph_u, ordering_method="natural"
+    )
     Prec_est = Prec_est.todense()
 
     entries_at_one = Prec_est[G_matrix > 0]
     entries_at_zero = Prec_est[G_matrix == 0]
 
-    desired = np.array([1.03392773, -0.05258232, 1.01306568, 1.00690361])
+    desired = np.array([1.03393041, -0.05494438, 1.02092228, 1.00923821])
     np.testing.assert_allclose(entries_at_one[::9], desired, atol=1e-8)
 
-    desired = np.array([0.0, 0.0, 0.0004151, 0.0, 0.0, -0.01840388, 0.0, 0.0])
+    desired = np.array([0.0, 0.0, 0.0, 0.01763788, -0.03135188, 0.0, 0.0, 0.0])
     np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
 
 
