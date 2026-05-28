@@ -63,7 +63,7 @@ def generate_gaussian_noise(
     # General case: precision matrix is not diagonal
     z = rng.normal(size=(m, n))
 
-    # The simplest, but naive, way to sampel is to compute:
+    # The simplest, but naive, way to sample is to compute:
     # cov = np.linalg.inv(Prec.todense())
     # C = np.linalg.cholesky(cov)
     # assert np.allclose(C @ C.T, cov)
