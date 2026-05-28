@@ -116,7 +116,7 @@ def test_affine_invariance(seed):
         # Estimate precision matrix
         Prec_u = fit_precision_cholesky_approximate(
             U=U_in,
-            G=Graph_u,
+            Graph_u=Graph_u,
             use_tqdm=False,
         )
         enif = EnIF(Prec_u=Prec_u, Prec_eps=Prec_eps, H=H)
@@ -167,7 +167,7 @@ def test_snapshot_lowlevel():
     # Estimate precision matrix
     Prec_u = fit_precision_cholesky_approximate(
         U=U,
-        G=Graph_u,
+        Graph_u=Graph_u,
         neighbourhood_expansion=2,
         use_tqdm=True,
     )

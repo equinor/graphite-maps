@@ -1,8 +1,66 @@
+import networkx as nx
 import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps import precision_estimation as precest
 from scipy.optimize import minimize
+
+
+def get_precision_data():
+    rng = np.random.default_rng(8)
+    n = 10  # Size
+    density = 0.4  # Density
+
+    # Create G indicating sparsity pattern
+    G = rng.uniform(size=(n, n)) < (density / 2)
+    G = G.T + G
+    np.fill_diagonal(G, G.diagonal() + 1)
+    G_matrix = (G > 0).astype(int)
+    Graph_u = nx.from_scipy_sparse_array(sp.sparse.csc_array(G_matrix))
+
+    # Create data U
+    U = rng.normal(size=(999, n))
+
+    return U, Graph_u, G_matrix
+
+
+def test_snapshot_fit_precision_cholesky():
+
+    U, Graph_u, G_matrix = get_precision_data()
+
+    # Estimate precision with fit_precision_cholesky
+    Prec_est, *_ = precest.fit_precision_cholesky(U=U, Graph_u=Graph_u)
+    Prec_est = Prec_est.todense()
+
+    entries_at_one = Prec_est[G_matrix > 0]
+    entries_at_zero = Prec_est[G_matrix == 0]
+
+    desired = np.array([1.03392773, -0.05258232, 1.01306568, 1.00690361])
+    np.testing.assert_allclose(entries_at_one[::9], desired, atol=1e-8)
+
+    desired = np.array([0.0, 0.0, 0.0004151, 0.0, 0.0, -0.01840388, 0.0, 0.0])
+    np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
+
+
+def test_snapshot_fit_precision_cholesky_approximate():
+
+    U, Graph_u, G_matrix = get_precision_data()
+    # Estimate precision with fit_precision_cholesky
+    Prec_est = precest.fit_precision_cholesky_approximate(
+        U=U, Graph_u=Graph_u, neighbourhood_expansion=2
+    )
+    Prec_est = Prec_est.todense()
+
+    entries_at_one = Prec_est[G_matrix > 0]
+    entries_at_zero = Prec_est[G_matrix == 0]
+
+    desired = np.array([1.03392773, -0.05606645, 1.022626, 1.00883855])
+    np.testing.assert_allclose(entries_at_one[::9], desired, atol=1e-8)
+
+    desired = np.array(
+        [0.0, -0.04588378, -0.00330536, -0.00124644, -0.0301345, -0.02301515, 0.0, 0.0]
+    )
+    np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
 
 
 def test_objective_twice():
