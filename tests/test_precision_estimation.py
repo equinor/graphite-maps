@@ -3,7 +3,104 @@ import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps import precision_estimation as precest
+from numpy.typing import NDArray
 from scipy.optimize import minimize
+
+
+def objective_function(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> float:
+    """
+    Objective function for optimizing the affine KR map with standard Gaussian
+    reference and l2 regularized dependence.
+
+    Parameters
+    ----------
+    C_k : np.ndarray
+        The current estimate of non-zero elements in row of C-factor of
+        associate precision matrix CTC = Prec.
+    U : np.ndarray
+        The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
+
+    Returns
+    -------
+    float
+        The value of `objective_function`.
+    """
+    C_k = C_k.copy()
+
+    C_k[-1] = np.exp(C_k[-1])
+    Su = U.dot(C_k)
+    n, _ = U.shape
+    regularization_l2 = 0.5 * lambda_l2 * np.sum(C_k[:-1] ** 2)
+    return 0.5 * np.sum(Su**2) - n * np.log(abs(C_k[-1])) + regularization_l2
+
+
+def gradient(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> NDArray[np.floating]:
+    """
+    Gradient of the objective function.
+
+    Parameters
+    ----------
+    C_k : np.ndarray
+        The current estimate of non-zero elements in row of C-factor of
+        associate precision matrix CTC = Prec.
+    U : np.ndarray
+        The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
+
+    Returns
+    -------
+    np.ndarray
+        The gradient of the objective function.
+    """
+    C_k = C_k.copy()
+
+    n, _ = U.shape
+    C_k[-1] = np.exp(C_k[-1])
+    prediction = U.dot(C_k)
+    grad = U.T.dot(prediction)
+    grad[:-1] += lambda_l2 * C_k[:-1]  # Adjust for L2 regularization
+    grad[-1] -= n / C_k[-1]  # Adjust for the -log|C_k,k| term
+    grad[-1] *= C_k[-1]  # Adjust for log-transform
+    return grad
+
+
+def hessian(
+    C_k: NDArray[np.floating], U: NDArray[np.floating], lambda_l2: float = 1.0
+) -> NDArray[np.floating]:
+    """
+    Hessian `objective_function`.
+
+    Parameters
+    ----------
+    C_k : np.ndarray
+        The current estimate of non-zero elements in row of C-factor of
+        associate precision matrix CTC = Prec.
+    U : np.ndarray
+        The data matrix ordered according to CTC=Prec_u.
+    lambda_l2 : float, optional
+        The regularization strength for L2 regularization.
+
+    Returns
+    -------
+    np.ndarray
+        The Hessian of the objective function.
+    """
+    C_k = C_k.copy()
+
+    n, _ = U.shape
+    H = U.T.dot(U)
+    np.fill_diagonal(H[:-1, :-1], H.diagonal()[:-1] + lambda_l2)  # L2-term
+    C_k[-1] = np.exp(C_k[-1])  # log-transform
+    H[-1, -1] += n / (C_k[-1] ** 2)  # Adjust for the -log|C_k,k| term
+    H[-1, -1] *= 2.0 * C_k[-1]  # log-transform adjustment
+    return H
 
 
 def get_precision_data():
@@ -111,14 +208,14 @@ def test_objective_twice():
     C_k = np.exp(rng.normal(0, 0.1, size=5))
     U = rng.normal(size=(5, 5))
 
-    value1 = precest.objective_function(C_k, U)
-    value2 = precest.objective_function(C_k, U)
+    value1 = objective_function(C_k, U)
+    value2 = objective_function(C_k, U)
     np.testing.assert_allclose(value1, value2)
 
     # Check gradient
     rmse = sp.optimize.check_grad(
-        precest.objective_function,
-        precest.gradient,
+        objective_function,
+        gradient,
         np.array([1, 2, 3, 4, 4.5]),
         U,
         rng=rng,
@@ -139,11 +236,11 @@ def test_closed_form_matches_iterative_solver():
     # Iterative reference solution (L-BFGS-B on the log-diagonal parametrisation)
     x0 = np.zeros(n_cols)
     res = minimize(
-        fun=precest.objective_function,
+        fun=objective_function,
         x0=x0,
         args=(U_reduced, lambda_l2),
         method="L-BFGS-B",
-        jac=precest.gradient,
+        jac=gradient,
         tol=1e-12,
         options={"gtol": 1e-9},
     )
