@@ -482,7 +482,7 @@ def fit_precision_cholesky(
 
 def fit_precision_cholesky_approximate(
     U: NDArray[np.floating],
-    G: nx.Graph,
+    Graph_u: nx.Graph,
     neighbourhood_expansion: int = 2,
     use_tqdm: bool = True,
 ) -> csc_array:
@@ -512,7 +512,7 @@ def fit_precision_cholesky_approximate(
         The optimized sparse Cholesky factor of the precision matrix.
     """
     # The k'th power is a "neighborhood expansion", see docs of nx.power
-    G = nx.power(G, k=neighbourhood_expansion)
+    G = nx.power(Graph_u, k=neighbourhood_expansion)
     G.add_edges_from((n, n) for n in G.nodes())  # Add edges (1, 1), (2, 2), ...
 
     C = optimize_sparse_affine_kr_map(
