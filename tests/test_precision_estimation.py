@@ -30,7 +30,7 @@ def test_snapshot_fit_precision_cholesky():
 
     # Estimate precision with fit_precision_cholesky.
     # Cannot use METIS (not reproducible across OSes), use 'natural'
-    Prec_est = precest.fit_precision_cholesky(
+    Prec_est, *_ = precest.fit_precision_cholesky(
         U=U, Graph_u=Graph_u, ordering_method="natural"
     )
     Prec_est = Prec_est.todense()
@@ -88,20 +88,22 @@ def test_precision_cholesky_roundtrip(seed):
     Cov = np.linalg.inv(Prec)
     U = rng.multivariate_normal(mean=np.zeros(n), cov=Cov, size=99)
 
-    # Estimate precision
+    # Estimate precision using known structure
     Prec_est, *_ = precest.fit_precision_cholesky(
         U=U, Graph_u=Graph_u, ordering_method="amd"
     )
-    
-    Prec_est=Prec_est.todense()
+    Prec_est = Prec_est.todense()
 
     RMSE = np.sqrt(np.mean((Prec - Prec_est) ** 2))
 
-    # Estimate the naive way
+    # Estimate the naive way - invert the empirical covariance
     Prec_naive = np.linalg.inv(np.cov(U, rowvar=False))
     RMSE_naive = np.sqrt(np.mean((Prec - Prec_naive) ** 2))
 
-    assert RMSE_naive * 0.8 > RMSE
+    # Here 0.77 was chosen to make all tests pass, to easier catch
+    # regressions. Nothing special about the number. Main idea: beat naive!
+    assert RMSE_naive * 0.77 > RMSE
+
 
 def test_objective_twice():
     # A regression test: ensure that two calls return the same result.

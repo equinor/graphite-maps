@@ -299,6 +299,7 @@ def optimize_sparse_affine_kr_map(
         The data matrix with shape (samples, parameters)
     G : networkx.Graph
         The graph representing the non-zero structure in C.
+        Where C is the Cholesky factor such that C.T @ C = Prev.
 
     Returns
     -------
@@ -333,7 +334,10 @@ def optimize_sparse_affine_kr_map(
     >>> cov = np.linalg.inv(Prec)
     >>> U = rng.multivariate_normal(mean=mean, cov=cov, size=999)
 
-    >>> G_mat = sp.sparse.csc_array((Prec != 0).astype(int))
+    The non-zero structure in the Cholesky factor of the Precision:
+
+    >>> G_mat = np.eye(4) + np.diag(np.ones(3), k=-1)
+    >>> G_mat = sp.sparse.csc_array(G_mat.astype(int))
     >>> G = nx.from_scipy_sparse_array(G_mat)
     >>> G.edges
     EdgeView([(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)])
@@ -438,9 +442,10 @@ def fit_precision_cholesky(
 
     Parameters
     ----------
-    U : The data matrix.
-    Graph_u : The graph representing the non-zero structure in the precision
-    matrix.
+    U : np.ndarray
+        The data matrix with shape (samples, parameters)
+    G : networkx.Graph
+        Graph representing non-zero structure in the precision matrix.
 
     Returns
     -------
@@ -451,7 +456,7 @@ def fit_precision_cholesky(
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
     if Graph_C is None or perm_compose is None or P_rev is None or P_order is None:
-        # 1. Find in-fill reducing ordering for C
+        # 1. Find in-fill reducing ordering of cholesky factor C
         Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(
             Graph_u,
             ordering_method=ordering_method,
@@ -477,7 +482,7 @@ def fit_precision_cholesky(
 
 def fit_precision_cholesky_approximate(
     U: NDArray[np.floating],
-    G: nx.Graph,
+    Graph_u: nx.Graph,
     neighbourhood_expansion: int = 2,
     use_tqdm: bool = True,
 ) -> csc_array:
@@ -495,9 +500,9 @@ def fit_precision_cholesky_approximate(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix.
+        The data matrix with shape (samples, parameters)
     G : networkx.Graph
-        The graph representing the non-zero structure in C.
+        Graph representing non-zero structure in the precision matrix.
     neighbourhood_expansion: int, optional
         The number of hops to the new neighbourhood set
 
@@ -507,7 +512,7 @@ def fit_precision_cholesky_approximate(
         The optimized sparse Cholesky factor of the precision matrix.
     """
     # The k'th power is a "neighborhood expansion", see docs of nx.power
-    G = nx.power(G, k=neighbourhood_expansion)
+    G = nx.power(Graph_u, k=neighbourhood_expansion)
     G.add_edges_from((n, n) for n in G.nodes())  # Add edges (1, 1), (2, 2), ...
 
     C = optimize_sparse_affine_kr_map(
