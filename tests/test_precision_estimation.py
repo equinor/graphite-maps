@@ -9,7 +9,7 @@ from scipy.optimize import minimize
 def get_precision_data():
     rng = np.random.default_rng(8)
     n = 10  # Size
-    density = 0.4  # Density
+    density = 0.4
 
     # Create G indicating sparsity pattern
     G = rng.uniform(size=(n, n)) < (density / 2)
