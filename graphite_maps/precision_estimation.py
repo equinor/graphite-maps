@@ -26,7 +26,7 @@ def reverse_cholesky(
     A: csc_array, *args: object, **kwargs: object
 ) -> tuple[csc_array, NDArray[np.integer]]:
     """Given a sparse pos. def. matrix A, compute C and P such that
-    C.T @ C == P A P.T, where C is lower-triangular and P is a permutation.
+    C.T @ C == P @ A @ P.T, where C is lower-triangular and P is a permutation.
 
     This differs from the standard Cholesky factorization, which computes
     L @ L.T = P @ A @ P.T, where L is lower-triangular.
