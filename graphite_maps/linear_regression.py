@@ -193,7 +193,7 @@ def boost_linear_regression(
     """
     n_samples, n_features = X.shape
     coefficients = np.zeros(n_features)
-    residuals = y.copy()
+    residuals = y.copy()  # residuals = y - X @ coef = y - X @ 0 = y
     residuals_loo = y.copy()
 
     # A stricter criterion is the loo-adjustment: mse(residuals_loo)-mse
@@ -220,15 +220,12 @@ def boost_linear_regression(
         # Inlined influence: psi / M
         # where influence = -residuals * x and
         # M = -mean(x^2) = -1 since x standardized
-        influence = (residuals - beta_estimate * X[:, best_feature]) * X[
-            :, best_feature
-        ]
+        X_best = X[:, best_feature]
+        influence = (residuals - beta_estimate * X_best) * X_best
         beta_estimate_loo = beta_estimate - influence / n_samples
 
         # residuals_full = residuals - beta_estimate * X[:, best_feature]
-        residuals_full_loo = (
-            residuals_loo - learning_rate * beta_estimate_loo * X[:, best_feature]
-        )
+        residuals_full_loo = residuals_loo - learning_rate * beta_estimate_loo * X_best
 
         if mse(residuals_loo) < mse(residuals_full_loo):
             break
@@ -246,7 +243,7 @@ def boost_linear_regression(
             break
         else:
             # Update
-            residuals -= coef_change * X[:, best_feature]
+            residuals -= coef_change * X_best
             coefficients[best_feature] += coef_change
 
             # loo update
