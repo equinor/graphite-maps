@@ -30,7 +30,7 @@ def test_snapshot_fit_precision_cholesky():
 
     # Estimate precision with fit_precision_cholesky.
     # Cannot use METIS (not reproducible across OSes), use 'natural'
-    Prec_est, *_ = precest.fit_precision_cholesky(
+    Prec_est = precest.fit_precision_cholesky(
         U=U, Graph_u=Graph_u, ordering_method="natural"
     )
     Prec_est = Prec_est.todense()
@@ -89,10 +89,9 @@ def test_precision_cholesky_roundtrip(seed):
     U = rng.multivariate_normal(mean=np.zeros(n), cov=Cov, size=99)
 
     # Estimate precision using known structure
-    Prec_est, *_ = precest.fit_precision_cholesky(
+    Prec_est = precest.fit_precision_cholesky(
         U=U, Graph_u=Graph_u, ordering_method="amd"
-    )
-    Prec_est = Prec_est.todense()
+    ).todense()
 
     RMSE = np.sqrt(np.mean((Prec - Prec_est) ** 2))
 

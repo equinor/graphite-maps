@@ -1,3 +1,12 @@
+"""
+Precision estimation
+--------------------
+
+This module contains functions for solving the following problem:
+    Given a known sparsity pattern in a precision matrix,
+    as well as a data set, how can we estimate the precision matrix values?
+"""
+
 import logging
 import time
 
@@ -6,132 +15,65 @@ import numpy as np
 import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.sparse import csc_array, tril
-from sksparse.cholmod import Factor, cholesky
+from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 
-def find_sparsity_structure_from_chol(
-    chol_LLT: Factor,
-) -> tuple[nx.Graph, NDArray[np.integer], csc_array, csc_array]:
-    L = chol_LLT.L()
-    p = L.shape[0]
+def reverse_cholesky(
+    A: csc_array, *args, **kwargs
+) -> tuple[csc_array, NDArray[np.integer]]:
+    """Given a sparse pos. def. matrix A, compute C and P such that
+    C.T @ C == P A P.T, where C is lower-triangular and P is a permutation.
 
-    # Get the in-fill reducing permutation vector
-    perm_order = chol_LLT.P()
+    This differs from the standard Cholesky factorization, which computes
+    L @ L.T = P A P.T, where L is lower-triangular.
 
-    # Create the permutation matrix P
-    P_order = sp.csc_array(
-        (np.ones(len(perm_order)), (perm_order, np.arange(len(perm_order)))),
-        shape=(p, p),
-    )
-
-    # Create the reverse order permutation array
-    perm_reverse = np.arange(p - 1, -1, -1)
-    # Create the reverse permutation matrix
-    P_rev = sp.csc_array((np.ones(p), (perm_reverse, np.arange(p))), shape=(p, p))
-
-    # Apply in-fill reducing ordering permutation to reverse permutation
-    perm_compose = perm_order[perm_reverse]
-
-    # Extract the lower triangular Cholesky factor
-    L = chol_LLT.L()
-
-    # Create matrix of non-zeroes equalling C: L @ L.T=C.T @ C unique when SPD
-    C_pattern = (P_rev @ L @ P_rev).T
-
-    # Extract structure into a graph for C
-    Graph_C = nx.from_scipy_sparse_array(C_pattern)
-    Graph_C.remove_edges_from(nx.selfloop_edges(Graph_C))
-
-    # Return the results
-    return Graph_C, perm_compose, P_rev, P_order
-
-
-def find_sparsity_structure_from_graph(
-    Graph_u: nx.Graph,
-    ordering_method: str = "metis",
-) -> tuple[nx.Graph, NDArray[np.integer], csc_array, csc_array]:
-    """
-    Finds sparsity structure for lower triangular C so that
-      C.T @ C = L @ L.T = P.T @ A @ P.
-
-    The permutation P is optimized and returned, so is the non-zero structure
-    of C. For convenience the permutation so that data for A can be arranged
-    according to C is also returned.
-
-    Parameters
-    ----------
-    Graph_u : nx.Graph
-        The graph representing the non-zero structure in the precision matrix.
-
-    Returns
-    -------
-    Graph_C : nx.Graph
-        The graph representing the non-zero structure in C.
-    perm_compose : NDArray[np.integer]
-        The composed permutation array.
-    P_rev : scipy.sparse.csc_array
-        The reverse permutation matrix.
-    P_order : scipy.sparse.csc_array
-        The in-fill reducing ordering permutation matrix.
+    Returns (C: csc_array, permutation_idx: array). The permutation index
+    acts like P on the left when indexing the rows. See examples.
 
     Examples
     --------
-    >>> import networkx as nx
-    >>> Graph_u = nx.Graph([(0, 1), (0, 3), (0, 4), (1, 4), (3, 4)])
+    >>> F = sp.random_array(shape=(10, 10), density=0.2, rng=42, format='csc')
+    >>> A = F @ F.T
+    >>> A.setdiag(10)
+    >>> C, permutation_idx = reverse_cholesky(A)
+    >>> diff = C.T @ C - A[np.ix_(permutation_idx, permutation_idx)]
+    >>> float(np.mean(np.abs(diff)))
+    9.7705...e-17
 
-    The "metis" ordering method is not deterministic, so we use "natural" here:
+    Or, equivalently (C @ P).T @ (C @ P) = A.
+    Here P acts on the right, so we must use its inverse:
 
-    >>> result = find_sparsity_structure_from_graph(Graph_u, ordering_method="natural")
-    >>> Graph_C, perm_compose, P_rev, P_order = result
-    >>> nx.to_scipy_sparse_array(Graph_C).todense().round(1)
-    array([[ 0. ,  0.4,  0.4,  0.5],
-           [ 0.4,  0. , -0.1,  0.5],
-           [ 0.4, -0.1,  0. ,  0.5],
-           [ 0.5,  0.5,  0.5,  0. ]])
-    >>> perm_compose
-    array([3, 2, 1, 0])
-    >>> P_rev.todense()
-    array([[0., 0., 0., 1.],
-           [0., 0., 1., 0.],
-           [0., 1., 0., 0.],
-           [1., 0., 0., 0.]])
-    >>> P_order.todense()
-    array([[1., 0., 0., 0.],
-           [0., 1., 0., 0.],
-           [0., 0., 1., 0.],
-           [0., 0., 0., 1.]])
+    >>> inverse_perm = np.empty_like(permutation_idx)
+    >>> inverse_perm[permutation_idx] = np.arange(len(permutation_idx))
+
+    >>> F = C[:, inverse_perm]
+    >>> diff = F.T @ F - A
+    >>> float(np.mean(np.abs(diff)))
+    9.7705...e-17
+
+    The usage of the permutation index (expressing the matrix P), follows the
+    convention established by standard Cholesky. This function is a thin
+    wrapper around this kind of code (but this function computes C, not L):
+
+    >>> from sksparse.cholmod import cholesky
+    >>> factor = cholesky(A)
+    >>> L, permutation_idx = factor.L(), factor.P()
+    >>> diff = L @ L.T - A[np.ix_(permutation_idx, permutation_idx)]
+    >>> float(np.mean(np.abs(diff)))
+    1.3323...e-16
     """
+    cholesky_factor = cholesky(A, *args, **kwargs)
+    L = cholesky_factor.L()
+    permutation_idx = cholesky_factor.P()
 
-    # Create SPD matrix with same sparsity structure as Prec
-    SPD_Prec = nx.to_scipy_sparse_array(
-        Graph_u, weight=None, dtype=np.float64, format="csc"
-    )
-    # Use Gershgorin circle theorem to ensure SP
-    # This ensures all eigenvalues are in a circle centered at max_degree+1.0
-    # and radius < (max_degree+1.0), so guaranteed > 0
-    max_degree = max(dict(Graph_u.degree()).values())
-    log.info("max degree of graph is: %s", max_degree)
-    SPD_Prec.setdiag(max_degree + 1.0)
-
-    # PT prec P = LLT
-    start = time.perf_counter()
-    chol_LLT = cholesky(SPD_Prec, ordering_method=ordering_method)
-    end = time.perf_counter()
-    log.info("Permutation optimization took %.2f seconds", end - start)
-
-    Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_chol(
-        chol_LLT=chol_LLT
-    )
-
-    log.info("Parameters in precision: %s\n", tril(SPD_Prec).nnz)
-    log.info("Parameters in Cholesky factor: %s", Graph_C.number_of_edges())
-
-    # Return the results
-    return Graph_C, perm_compose, P_rev, P_order
+    # If we ignore the permutation, then we have the relationship:
+    #   C = cholesky(A[::-1, ::-1]).T[::-1, ::-1]
+    C = L[::-1, ::-1].T
+    return C, permutation_idx[::-1]
 
 
 def objective_function(
@@ -429,12 +371,9 @@ def optimize_sparse_affine_kr_map(
 def fit_precision_cholesky(
     U: NDArray[np.floating],
     Graph_u: nx.Graph,
+    *,
     ordering_method: str = "metis",
     use_tqdm: bool = True,
-    Graph_C: nx.Graph | None = None,
-    perm_compose: NDArray[np.integer] | None = None,
-    P_rev: csc_array | None = None,
-    P_order: csc_array | None = None,
 ) -> tuple[csc_array, nx.Graph, NDArray[np.integer], csc_array, csc_array]:
     """
     Estimate the precision matrix using Cholesky decomposition.
@@ -455,29 +394,60 @@ def fit_precision_cholesky(
     _, p = U.shape
     assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
 
-    if Graph_C is None or perm_compose is None or P_rev is None or P_order is None:
-        # 1. Find in-fill reducing ordering of cholesky factor C
-        Graph_C, perm_compose, P_rev, P_order = find_sparsity_structure_from_graph(
-            Graph_u,
-            ordering_method=ordering_method,
-        )
+    # Step 1: Cholesky factor of the dependency graph Graph_u
+    # -------------------------------------------------------
 
-    # 2. Estimate non-zeroes of C
-    U_perm = U[:, perm_compose]
+    # Create pos. def. matrix with same sparsity structure as Prec
+    SPD_Prec = nx.to_scipy_sparse_array(
+        Graph_u, weight=None, dtype=np.float64, format="csc"
+    )
+    # Use Gershgorin circle theorem to ensure positive definite
+    # All eigenvalues are in a circle centered at max_degree+1.0
+    # and radius < (max_degree+1.0), so guaranteed > 0
+    SPD_Prec.setdiag(max(dict(Graph_u.degree()).values()) + 1.0)
+
+    # Compute Cholesky of the sparsity pattern (a symbolic cholesky)
+    start = time.perf_counter()
+    C_pattern, permutation_idx = reverse_cholesky(
+        SPD_Prec, ordering_method=ordering_method
+    )
+    end = time.perf_counter()
+    log.info("Cholesky of precision matrix took %.2f seconds", end - start)
+    Graph_C = nx.from_scipy_sparse_array(C_pattern)
+    log.info("Parameters in precision: %s\n", tril(SPD_Prec).nnz)
+    log.info("Parameters in Cholesky factor: %s", Graph_C.number_of_edges())
+
+    inverse_perm = np.empty_like(permutation_idx)
+    inverse_perm[permutation_idx] = np.arange(len(permutation_idx))
+
+    # Step 2: Estimate non-zeros of C, the (reverse) Cholesky factor
+    # --------------------------------------------------------------
+
+    # The function 'reverse_cholesky' above has found a C that is a factor
+    # of a permuted Graph_u (not the original one), so we must permute U too.
+    # Why permute at all? To have as many zeroes as possible in C.
+    U_perm = U[:, permutation_idx]
     C = optimize_sparse_affine_kr_map(
         U=U_perm,
         G=Graph_C,
         use_tqdm=use_tqdm,
     )
 
-    # 2.b Compute log-determinant of estimate, for logging
-    L_r = P_rev @ C.T @ P_rev  # Factor of reverse precision
-    prec_logdet = 2.0 * np.sum(np.log(L_r.diagonal()))
+    # Compute log-determinant of estimate
+    prec_logdet = 2.0 * np.sum(np.log(C.diagonal()))
     log.info("Precision has log-determinant: %.3f", prec_logdet)
 
-    # 3. Unwrap C to yield precision (Eqn 73 in paper)
-    Prec = P_order @ P_rev @ (C.T @ C) @ P_rev @ P_order.T
-    return Prec, Graph_C, perm_compose, P_rev, P_order
+    # Step 3: Compute precision matrix from C and invert permutation
+    # --------------------------------------------------------------
+
+    # Inverse permutation
+    inverse_perm = np.empty_like(permutation_idx)
+    inverse_perm[permutation_idx] = np.arange(len(permutation_idx))
+
+    # Unwrap C to yield precision (Eqn 73 in paper)
+    # Equivalent to: (C.T @ C)[np.ix_(inverse_perm, inverse_perm)]
+    C_orig = C[:, inverse_perm]
+    return C_orig.T @ C_orig
 
 
 def fit_precision_cholesky_approximate(

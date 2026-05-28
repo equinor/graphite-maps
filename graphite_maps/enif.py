@@ -201,7 +201,7 @@ class EnIF:
         Estimate self.Prec_u from data U w.r.t. graph self.Graph_u
         """
         assert self.Graph_u is not None, "Graph_u must be set to fit precision"
-        (self.Prec_u, *_) = fit_precision_cholesky(
+        self.Prec_u = fit_precision_cholesky(
             U=U,
             Graph_u=self.Graph_u,
             ordering_method=ordering_method,
