@@ -1,9 +1,107 @@
+import networkx as nx
 import numpy as np
 import pytest
 import scipy as sp
 from graphite_maps import precision_estimation as precest
 from scipy.optimize import minimize
 
+
+def get_precision_data():
+    rng = np.random.default_rng(8)
+    n = 10  # Size
+    density = 0.4
+
+    # Create G indicating sparsity pattern
+    G = rng.uniform(size=(n, n)) < (density / 2)
+    G = G.T + G
+    np.fill_diagonal(G, G.diagonal() + 1)
+    G_matrix = (G > 0).astype(int)
+    Graph_u = nx.from_scipy_sparse_array(sp.sparse.csc_array(G_matrix))
+
+    # Create data U
+    U = rng.normal(size=(999, n))
+
+    return U, Graph_u, G_matrix
+
+
+def test_snapshot_fit_precision_cholesky():
+
+    U, Graph_u, G_matrix = get_precision_data()
+
+    # Estimate precision with fit_precision_cholesky.
+    # Cannot use METIS (not reproducible across OSes), use 'natural'
+    Prec_est = precest.fit_precision_cholesky(
+        U=U, Graph_u=Graph_u, ordering_method="natural"
+    )
+    Prec_est = Prec_est.todense()
+
+    entries_at_one = Prec_est[G_matrix > 0]
+    entries_at_zero = Prec_est[G_matrix == 0]
+
+    desired = np.array([1.03393041, -0.05494438, 1.02092228, 1.00923821])
+    np.testing.assert_allclose(entries_at_one[::9], desired, atol=1e-8)
+
+    desired = np.array([0.0, 0.0, 0.0, 0.01763788, -0.03135188, 0.0, 0.0, 0.0])
+    np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
+
+
+def test_snapshot_fit_precision_cholesky_approximate():
+
+    U, Graph_u, G_matrix = get_precision_data()
+    # Estimate precision with fit_precision_cholesky
+    Prec_est = precest.fit_precision_cholesky_approximate(
+        U=U, Graph_u=Graph_u, neighbourhood_expansion=2
+    )
+    Prec_est = Prec_est.todense()
+
+    entries_at_one = Prec_est[G_matrix > 0]
+    entries_at_zero = Prec_est[G_matrix == 0]
+
+    desired = np.array([1.03392773, -0.05606645, 1.022626, 1.00883855])
+    np.testing.assert_allclose(entries_at_one[::9], desired, atol=1e-8)
+
+    desired = np.array(
+        [0.0, -0.04588378, -0.00330536, -0.00124644, -0.0301345, -0.02301515, 0.0, 0.0]
+    )
+    np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
+
+
+@pytest.mark.parametrize("seed", range(99))
+def test_precision_cholesky_roundtrip(seed):
+    """Starting from a known, sparse precision matrix, we generate data,
+    then try to infer the known values from the samples."""
+
+    # Create sparse, pos.def precision matrix
+    rng = np.random.default_rng(seed)
+    n = 25  # Size
+    density = 0.1
+
+    # Create sparse pos def precision matrix
+    F = rng.normal(size=(n, n))
+    F[rng.uniform(size=(n, n)) > density] = 0
+    Prec = F.T @ F + np.eye(n)
+    assert np.all(np.linalg.svd(Prec).S > 0), "Pos def"
+
+    G_matrix = (~np.isclose(Prec, 0.0)).astype(int)
+    Graph_u = nx.from_scipy_sparse_array(sp.sparse.csc_array(G_matrix))
+
+    Cov = np.linalg.inv(Prec)
+    U = rng.multivariate_normal(mean=np.zeros(n), cov=Cov, size=99)
+
+    # Estimate precision
+    Prec_est, *_ = precest.fit_precision_cholesky(
+        U=U, Graph_u=Graph_u, ordering_method="amd"
+    )
+    
+    Prec_est=Prec_est.todense()
+
+    RMSE = np.sqrt(np.mean((Prec - Prec_est) ** 2))
+
+    # Estimate the naive way
+    Prec_naive = np.linalg.inv(np.cov(U, rowvar=False))
+    RMSE_naive = np.sqrt(np.mean((Prec - Prec_naive) ** 2))
+
+    assert RMSE_naive * 0.8 > RMSE
 
 def test_objective_twice():
     # A regression test: ensure that two calls return the same result.
