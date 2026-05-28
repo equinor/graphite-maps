@@ -254,6 +254,11 @@ class EnIF:
         if self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
 
+        # The equation below is only valid if Prec_eps is diagonal
+        row_idx, col_idx, _ = sp.sparse.find(self.Prec_eps)
+        if np.any(row_idx != col_idx):
+            raise ValueError("Precision matrix 'Prec_eps' must be diagonal")
+
         eps_variances = 1.0 / self.Prec_eps.diagonal()
         residual_noisy_var = self.unexplained_variance + eps_variances
         Prec_r = diags_array(1.0 / residual_noisy_var, offsets=0, format="csc")
