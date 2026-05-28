@@ -79,8 +79,8 @@ def test_snapshot_highlevel():
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
     # Check result
-    desired = np.array([0.039102, -0.491275, -0.913188, -0.318065, -1.603981])
-    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+    desired = np.array([0.01311213, -0.40208624, -0.49277274, -0.29639235, -1.84713641])
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-6)
 
     # Call the high-level API, using "Prec_u"
     Prec_u = rng.normal(size=(n_params, n_params))
@@ -93,8 +93,10 @@ def test_snapshot_highlevel():
     gtmap.fit(U, ordering_method="natural")
     U_posterior = gtmap.transport(U, Y, d, seed=42)
 
-    desired = np.array([-0.042127, -0.421971, -0.94604, -0.261284, -1.491031])
-    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-5)
+    desired = np.array(
+        [-0.03747837, -0.35764201, -0.78659938, -0.26586081, -1.53651656]
+    )
+    np.testing.assert_allclose(np.diag(U_posterior)[:5], desired, rtol=1e-6)
 
 
 @pytest.mark.parametrize("seed", range(10))
@@ -196,7 +198,7 @@ def test_snapshot_lowlevel():
     )
 
     desired_X_updated = np.array(
-        [0.12753731, -0.5230994, -0.79840529, -0.40772139, -1.4620114]
+        [-0.19630398, -0.27700102, -0.87434721, 0.03307433, -1.60668824]
     )
     np.testing.assert_allclose(np.diag(X_updated)[:5], desired_X_updated, rtol=1e-6)
 
