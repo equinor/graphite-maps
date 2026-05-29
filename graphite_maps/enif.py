@@ -169,6 +169,7 @@ class EnIF:
 
         # Work out residuals and associate unexplained variance
         residuals = self.response_residual(U, Y)
+
         # Due to observation error
         eps = self.generate_observation_noise(
             n,
@@ -178,9 +179,9 @@ class EnIF:
 
         # Update in canonical parametrization
         canonical_updated = self.update_canonical(
-            canonical,
-            residual_noisy,
-            d,
+            canonical=canonical,
+            residual_noisy=residual_noisy,
+            d=d,
         )
 
         # Bring realizations back
@@ -252,6 +253,11 @@ class EnIF:
     def Prec_residual_noisy(self) -> sparray:
         if self.unexplained_variance is None:
             raise ValueError("`unexplained_variance` is not set.")
+
+        # The equation below is only valid if Prec_eps is diagonal
+        row_idx, col_idx, _ = sp.sparse.find(self.Prec_eps)
+        if np.any(row_idx != col_idx):
+            raise ValueError("Precision matrix 'Prec_eps' must be diagonal")
 
         eps_variances = 1.0 / self.Prec_eps.diagonal()
         residual_noisy_var = self.unexplained_variance + eps_variances
@@ -327,7 +333,7 @@ class EnIF:
             logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
-        Prec_r = self.Prec_residual_noisy()
+        Prec_r = self.Prec_residual_noisy()  # This is a diagonal matrix
 
         # posterior canonical params
         # this is equation (46), but transposed to update each row (realizations)
@@ -338,9 +344,10 @@ class EnIF:
         # posterior precision, equation (47)
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
-        chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-        logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
-        log.info("Posterior precision log-determinant: %.3f", logdet_value)
+        if log.isEnabledFor(logging.INFO):
+            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+            log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
         return updated_canonical
 
