@@ -34,26 +34,24 @@ jobs:
         run: |
           echo "Installing suite-sparse..."
           brew install suite-sparse
-          suitesparse_dir="$(brew --prefix suitesparse)"
+          suitesparse_dir="$(brew --prefix suite-sparse)"
           suite_sparse_inc="$suitesparse_dir/include/suitesparse"
           suite_sparse_lib="$suitesparse_dir/lib"
 
           echo "suite_sparse_inc=$suite_sparse_inc"
           echo "suite_sparse_lib=$suite_sparse_lib"
 
-          pip install --upgrade pip setuptools wheel
-          git clone --branch v0.4.16 --single-branch https://github.com/scikit-sparse/scikit-sparse
+          pip install --upgrade pip setuptools wheel "Cython>=3.0" "numpy>=2.0"
 
-          echo "Doing editable scikit-sparse install"
-          SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel -e scikit-sparse
-
-          echo "copying scikit-sparse/sksparse to graphite_maps/sksparse ..."
-          cp -r scikit-sparse/sksparse graphite_maps/sksparse
-          cp scikit-sparse/LICENSE.txt graphite_maps/LICENSE_scikit_sparse.txt
+          # Vendor the cholmod-only subset of scikit-sparse 0.5.x. Homebrew's
+          # suite-sparse is already 7.x, so no source build is needed here.
+          git clone --branch v0.5.0 --single-branch \
+            https://github.com/scikit-sparse/scikit-sparse
+          sh wheel_build_scripts/vendor_scikit_sparse.sh scikit-sparse
           cp wheel_build_scripts/LICENSE_libsuitesparse_cholmod.txt ./LICENSE_libsuitesparse_cholmod.txt
           cp wheel_build_scripts/LICENSE_libsuitesparse.txt ./LICENSE_libsuitesparse.txt
 
-          # Breaks the install, fixes the wheel
+          # Breaks the source install, fixes the wheel: see setup_wheels_only.py.
           echo "adding wheel-only setup.py..."
           mv wheel_build_scripts/setup_wheels_only.py setup.py
 
@@ -64,7 +62,7 @@ jobs:
             echo "Set env SETUPTOOLS_SCM_PRETEND_VERSION to ${{ github.ref_name }}"
           fi
 
-          SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel .
+          SUITESPARSE_INCLUDE_DIR=$suite_sparse_inc SUITESPARSE_LIBRARY_DIR=$suite_sparse_lib pip wheel . --no-deps
 
           wheel_file=$(find . -name "graphite*.whl")
           echo "wheel is at @wheel_file"
