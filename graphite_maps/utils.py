@@ -4,7 +4,7 @@ import numpy as np
 import scipy as sp
 from numpy.typing import NDArray
 from scipy.sparse import sparray
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import cho_factor
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -74,9 +74,10 @@ def generate_gaussian_noise(
     # Rearrange to (P.T @ L) @ (P.T @ L).T = Prec, then take inverse
     # to see that C = inv((P.T @ L).T). Thus the equation eps = C @ z
     # becomes the system (P.T @ L).T @ eps = z, which we solve for eps below
-    factor = cholesky(Prec)
-    v = factor.solve_Lt(z, use_LDLt_decomposition=False)
-    return factor.apply_Pt(v).T
+    factor = cho_factor(Prec.tocsc())
+    v = factor.solve(z, system="Lt")
+    inverse_perm = np.argsort(factor.get_perm())
+    return v[inverse_perm].T
 
 
 if __name__ == "__main__":
