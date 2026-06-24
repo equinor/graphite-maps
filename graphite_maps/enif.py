@@ -6,7 +6,7 @@ import numpy as np
 import scipy as sp
 from numpy.typing import NDArray
 from scipy.sparse import diags_array, sparray
-from scipy.sparse.linalg import bicgstab
+from scipy.sparse.linalg import LinearOperator, cg
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
@@ -416,6 +416,14 @@ class EnIF:
 
         # === Iterative solution ===
         if iterative:
+            # Jacobi preconditioner: M ~= inv(diag(P_ss))
+            inv_diag_P_ss = 1.0 / P_ss.diagonal()
+            M = LinearOperator(
+                shape=P_ss.shape,
+                matvec=lambda x: inv_diag_P_ss * x,
+                dtype=P_ss.dtype,
+            )
+
             desc = "Mapping data to moment parametrisation realization-by-realization"
 
             for i in tqdm(range(U.shape[0]), desc=desc):
@@ -424,7 +432,7 @@ class EnIF:
                 else:
                     rhs = updated_canonical[i, s]
 
-                x_updated, _ = bicgstab(P_ss, rhs)
+                x_updated, _ = cg(P_ss, rhs, M=M)
                 U[i, s] = x_updated
 
             return U
