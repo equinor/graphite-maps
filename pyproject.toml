@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "numpy", "setuptools_scm>=8.1"]
+requires = ["setuptools>=42", "numpy>=2.0", "Cython>=3.0", "setuptools_scm>=8.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
@@ -15,22 +15,27 @@ dependencies = [
     "joblib",
     "matplotlib",
     "networkx",
+    "numpy>=2.0",
+    "packaging",
     "scikit-learn",
-    "scipy>=1.11",
+    "scipy>=1.14",
     "tqdm",
 ]
 dynamic = ["version"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["graphite_maps*"]
+# "sksparse*" matches the cholmod-only scikit-sparse subset that is vendored
+# into the repo root during wheel builds (see wheel_build_scripts/). It matches
+# nothing for a normal source/dev install, where scikit-sparse is a dev dep.
+include = ["graphite_maps*", "sksparse*"]
 
 [project.optional-dependencies]
 dev = [
     "mypy",
     "pre-commit",
     "pytest",
-    "scikit-sparse < 0.5.0", # Must be installed with linking towards libsuitesparse
+    "scikit-sparse >= 0.5.0", # Must be installed with linking towards libsuitesparse
     "types-networkx",
     "types-tqdm",
 ]

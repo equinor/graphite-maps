@@ -7,7 +7,7 @@ import scipy as sp
 from numpy.typing import NDArray
 from scipy.sparse import diags_array, sparray
 from scipy.sparse.linalg import bicgstab
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import cho_factor
 from tqdm import tqdm
 
 from graphite_maps import linear_regression as lr
@@ -329,8 +329,10 @@ class EnIF:
 
         # Only print this if logging is on. Cholesky can be heavy
         if log.isEnabledFor(logging.INFO):
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+            chol_LLT = cho_factor(self.Prec_u.tocsc(), order="metis")
+            logdet_value = 2.0 * np.sum(
+                np.log(chol_LLT.get_factor(kind="LL", lower=True).diagonal())
+            )
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
         Prec_r = self.Prec_residual_noisy()  # This is a diagonal matrix
@@ -345,8 +347,10 @@ class EnIF:
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
         if log.isEnabledFor(logging.INFO):
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
-            logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
+            chol_LLT = cho_factor(self.Prec_u.tocsc(), order="metis")
+            logdet_value = 2.0 * np.sum(
+                np.log(chol_LLT.get_factor(kind="LL", lower=True).diagonal())
+            )
             log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
         return updated_canonical
@@ -411,7 +415,7 @@ class EnIF:
         if s.size == 0:
             return U
 
-        P_ss = self.Prec_u[np.ix_(s, s)]
+        P_ss = self.Prec_u[np.ix_(s, s)].tocsc()
         P_s_not_s = self.Prec_u[np.ix_(s, not_s)]
 
         # === Iterative solution ===
@@ -430,13 +434,13 @@ class EnIF:
             return U
 
         # === Cholesky solution ===
-        chol_LLT = cholesky(P_ss, ordering_method="metis")
+        chol_LLT = cho_factor(P_ss, order="metis")
         if not_s.size > 0:
             rhs = updated_canonical[:, s].T - P_s_not_s @ U[:, not_s].T
         else:
             rhs = updated_canonical[:, s].T
 
-        U[:, s] = chol_LLT.solve_A(rhs).T
+        U[:, s] = chol_LLT.solve(rhs).T
         return U
 
     def get_update_indices(

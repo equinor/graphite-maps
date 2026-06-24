@@ -15,7 +15,7 @@ import numpy as np
 import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.sparse import csc_array, tril
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import cho_factor
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
@@ -41,8 +41,8 @@ def reverse_cholesky(
     >>> A.setdiag(10)
     >>> C, permutation_idx = reverse_cholesky(A)
     >>> diff = C.T @ C - A[np.ix_(permutation_idx, permutation_idx)]
-    >>> float(np.mean(np.abs(diff)))
-    9.7705...e-17
+    >>> bool(np.mean(np.abs(diff)) < 1e-12)
+    True
 
     Or, equivalently (C @ P).T @ (C @ P) = A.
     Here P acts on the right, so we must use its inverse:
@@ -52,23 +52,23 @@ def reverse_cholesky(
 
     >>> F = C[:, inverse_perm]
     >>> diff = F.T @ F - A
-    >>> float(np.mean(np.abs(diff)))
-    9.7705...e-17
+    >>> bool(np.mean(np.abs(diff)) < 1e-12)
+    True
 
     The usage of the permutation index (expressing the matrix P), follows the
     convention established by standard Cholesky. This function is a thin
     wrapper around this kind of code (but this function computes C, not L):
 
-    >>> from sksparse.cholmod import cholesky
-    >>> factor = cholesky(A)
-    >>> L, permutation_idx = factor.L(), factor.P()
+    >>> from sksparse.cholmod import cho_factor
+    >>> factor = cho_factor(A)
+    >>> L, permutation_idx = factor.get_factor(kind="LL", lower=True), factor.get_perm()
     >>> diff = L @ L.T - A[np.ix_(permutation_idx, permutation_idx)]
-    >>> float(np.mean(np.abs(diff)))
-    1.3323...e-16
+    >>> bool(np.mean(np.abs(diff)) < 1e-12)
+    True
     """
-    cholesky_factor = cholesky(A, *args, **kwargs)
-    L = cholesky_factor.L()
-    permutation_idx = cholesky_factor.P()
+    cholesky_factor = cho_factor(A, *args, **kwargs)
+    L = cholesky_factor.get_factor(kind="LL", lower=True)
+    permutation_idx = cholesky_factor.get_perm()
 
     # If we ignore the permutation, then we have the relationship:
     #   C = cholesky(A[::-1, ::-1]).T[::-1, ::-1]
@@ -312,9 +312,7 @@ def fit_precision_cholesky(
 
     # Compute Cholesky of the sparsity pattern (a symbolic cholesky)
     start = time.perf_counter()
-    C_pattern, permutation_idx = reverse_cholesky(
-        SPD_Prec, ordering_method=ordering_method
-    )
+    C_pattern, permutation_idx = reverse_cholesky(SPD_Prec, order=ordering_method)
     end = time.perf_counter()
     log.info("Cholesky of precision matrix took %.2f seconds", end - start)
     Graph_C = nx.from_scipy_sparse_array(C_pattern)
@@ -351,7 +349,7 @@ def fit_precision_cholesky(
     # Unwrap C to yield precision (Eqn 73 in paper)
     # Equivalent to: (C.T @ C)[np.ix_(inverse_perm, inverse_perm)]
     C_orig = C[:, inverse_perm]
-    return C_orig.T @ C_orig
+    return (C_orig.T @ C_orig).tocsc()
 
 
 def fit_precision_cholesky_approximate(
