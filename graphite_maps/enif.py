@@ -329,7 +329,7 @@ class EnIF:
 
         # Only print this if logging is on. Cholesky can be heavy
         if log.isEnabledFor(logging.INFO):
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            chol_LLT = cholesky(self.Prec_u.tocsc(), ordering_method="metis")
             logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Prior precision log-determinant: %.3f", logdet_value)
 
@@ -345,7 +345,7 @@ class EnIF:
         self.Prec_u = self.Prec_u + self.H.T @ Prec_r @ self.H  # Eqn (47)
 
         if log.isEnabledFor(logging.INFO):
-            chol_LLT = cholesky(self.Prec_u, ordering_method="metis")
+            chol_LLT = cholesky(self.Prec_u.tocsc(), ordering_method="metis")
             logdet_value = 2.0 * np.sum(np.log(chol_LLT.L().diagonal()))
             log.info("Posterior precision log-determinant: %.3f", logdet_value)
 
@@ -430,7 +430,7 @@ class EnIF:
             return U
 
         # === Cholesky solution ===
-        chol_LLT = cholesky(P_ss, ordering_method="metis")
+        chol_LLT = cholesky(P_ss.tocsc(), ordering_method="metis")
         if not_s.size > 0:
             rhs = updated_canonical[:, s].T - P_s_not_s @ U[:, not_s].T
         else:
