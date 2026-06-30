@@ -10,7 +10,7 @@ version_scheme = "only-version"
 name = "graphite-maps"
 description = "Ensemble based data assimilation learning graph informed triangular ensemble-to-posterior transport maps from data"
 authors = [{name = "Berent Lunde"}]
-requires-python = ">=3.11, <3.15"
+requires-python = ">=3.12, <3.15"
 dependencies = [
     "joblib",
     "matplotlib",
