@@ -2,6 +2,8 @@ Contributing
 The following is a set of guidelines for contributing to graphite-maps
 All code must be testable and unit tested.
 
+Install development dependencies with `uv sync --locked --extra dev`.
+
 Commits
 We strive to keep a consistent and clean git history and all contributions should adhere to the following:
 

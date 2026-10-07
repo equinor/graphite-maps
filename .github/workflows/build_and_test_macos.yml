@@ -8,9 +8,6 @@ on:
      - main
    tags: "*"
  pull_request:
-env:
-  UV_FROZEN: true         # https://docs.astral.sh/uv/configuration/environment/#uv_frozen
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -88,8 +85,11 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Download wheel artifact
@@ -97,6 +97,8 @@ jobs:
         with:
           name: "Python ${{ matrix.python-version }} wheel"
 
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev --no-install-project --no-install-package scikit-sparse
       - name: Install wheel
         run: |
           # Find the downloaded wheel file
@@ -105,16 +107,10 @@ jobs:
           echo "Found wheel file @ $wheel_file"
 
           # Install the wheel
-          pip install "$wheel_file"
-
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 0
+          uv pip install --python .venv/bin/python --no-deps "$wheel_file"
 
       - name: Run EnIF unit tests
-        run: |
-          python -m pip install pytest
-          pytest
+        run: uv run --no-sync pytest
 
   publish:
     name: Publish to PyPI
