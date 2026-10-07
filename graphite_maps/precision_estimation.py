@@ -41,8 +41,8 @@ def reverse_cholesky(
     >>> A.setdiag(10)
     >>> C, permutation_idx = reverse_cholesky(A)
     >>> diff = C.T @ C - A[np.ix_(permutation_idx, permutation_idx)]
-    >>> float(np.mean(np.abs(diff)))
-    9.7705...e-17
+    >>> np.allclose(diff.toarray(), 0.0, atol=1e-14)
+    True
 
     Or, equivalently (C @ P).T @ (C @ P) = A.
     Here P acts on the right, so we must use its inverse:
@@ -52,8 +52,8 @@ def reverse_cholesky(
 
     >>> F = C[:, inverse_perm]
     >>> diff = F.T @ F - A
-    >>> float(np.mean(np.abs(diff)))
-    9.7705...e-17
+    >>> np.allclose(diff.toarray(), 0.0, atol=1e-14)
+    True
 
     The usage of the permutation index (expressing the matrix P), follows the
     convention established by standard Cholesky. This function is a thin
@@ -63,8 +63,8 @@ def reverse_cholesky(
     >>> factor = cholesky(A)
     >>> L, permutation_idx = factor.L(), factor.P()
     >>> diff = L @ L.T - A[np.ix_(permutation_idx, permutation_idx)]
-    >>> float(np.mean(np.abs(diff)))
-    1.3323...e-16
+    >>> np.allclose(diff.toarray(), 0.0, atol=1e-14)
+    True
     """
     cholesky_factor = cholesky(A, *args, **kwargs)
     L = cholesky_factor.L()
@@ -303,7 +303,7 @@ def fit_precision_cholesky(
 
     # Create pos. def. matrix with same sparsity structure as Prec
     SPD_Prec = nx.to_scipy_sparse_array(
-        Graph_u, weight=None, dtype=np.float64, format="csc"
+        Graph_u, weight=None, dtype=np.dtype(np.float64), format="csc"
     )
     # Use Gershgorin circle theorem to ensure positive definite
     # All eigenvalues are in a circle centered at max_degree+1.0
