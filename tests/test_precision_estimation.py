@@ -142,6 +142,55 @@ def test_snapshot_fit_precision_cholesky():
     np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
 
 
+def test_that_precision_estimation_is_independent_of_graph_insertion_order():
+    graph = nx.convert_node_labels_to_integers(nx.grid_2d_graph(3, 4))
+    reordered_graph = nx.Graph()
+    reordered_graph.add_nodes_from([0, 1, 4, 2, 5, 3, 6, 7, 8, 9, 10, 11])
+    reordered_graph.add_edges_from(graph.edges)
+
+    rng = np.random.default_rng(42)
+    U = rng.normal(size=(100, 12))
+
+    precision = precest.fit_precision_cholesky(
+        U, graph, ordering_method="natural", use_tqdm=False
+    )
+    reordered_precision = precest.fit_precision_cholesky(
+        U, reordered_graph, ordering_method="natural", use_tqdm=False
+    )
+
+    np.testing.assert_allclose(
+        precision.toarray(), reordered_precision.toarray(), rtol=1e-12, atol=1e-12
+    )
+
+
+@pytest.mark.parametrize(
+    "nodes",
+    [
+        pytest.param([0, 1], id="missing-node"),
+        pytest.param([0, 1, 2, 3], id="extra-node"),
+        pytest.param([0, 1, 3], id="noncontiguous-labels"),
+        pytest.param(["0", "1", "2"], id="string-labels"),
+        pytest.param([0.0, 1.0, 2.0], id="float-labels"),
+    ],
+)
+@pytest.mark.parametrize(
+    "fit_precision",
+    [
+        precest.fit_precision_cholesky,
+        precest.fit_precision_cholesky_approximate,
+    ],
+)
+def test_that_precision_estimation_rejects_graph_nodes_that_do_not_match_columns(
+    nodes, fit_precision
+):
+    rng = np.random.default_rng(42)
+    U = rng.normal(size=(20, 3))
+    graph = nx.path_graph(nodes)
+
+    with pytest.raises(ValueError, match="Graph nodes must be integers"):
+        fit_precision(U, graph, use_tqdm=False)
+
+
 def test_snapshot_fit_precision_cholesky_approximate():
 
     U, Graph_u, G_matrix = get_precision_data()

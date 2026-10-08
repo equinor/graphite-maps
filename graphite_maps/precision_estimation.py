@@ -131,6 +131,16 @@ def solve_row_closed_form(
     return off_diag, float(diag_value)
 
 
+def _validate_graph_nodes(G: nx.Graph, p: int) -> None:
+    if len(G) != p or any(
+        not isinstance(node, int | np.integer) or not 0 <= node < p for node in G
+    ):
+        raise ValueError(
+            f"Graph nodes must be integers 0 through {p - 1}, "
+            "with node k corresponding to U[:, k]."
+        )
+
+
 def optimize_sparse_affine_kr_map(
     U: NDArray[np.floating],
     G: nx.Graph,
@@ -142,16 +152,22 @@ def optimize_sparse_affine_kr_map(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters)
+        The data matrix with shape (samples, parameters).
     G : networkx.Graph
-        The graph representing the non-zero structure in C.
-        Where C is the Cholesky factor such that C.T @ C = Prev.
+        The graph representing the non-zero structure in C, where C.T @ C = Prec.
+        Nodes must be the integers 0 through U.shape[1] - 1, with node k
+        corresponding to U[:, k], regardless of insertion order.
 
     Returns
     -------
     scipy.sparse.csc_array
         The optimized sparse Cholesky factor C of the precision matrix,
-        such that C.T @ C = Prec.
+        in U's column order, such that C.T @ C = Prec.
+
+    Raises
+    ------
+    ValueError
+        If the graph nodes do not match the data columns.
 
     Examples
     --------
@@ -236,6 +252,7 @@ def optimize_sparse_affine_kr_map(
 
     n, p = U.shape
     assert n > 1
+    _validate_graph_nodes(G, p)
 
     # Standardize data U to have zero mean, unit variance
     mu = U.mean(axis=0, keepdims=True)
@@ -286,24 +303,35 @@ def fit_precision_cholesky(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters)
-    G : networkx.Graph
+        The data matrix with shape (samples, parameters).
+    Graph_u : networkx.Graph
         Graph representing non-zero structure in the precision matrix.
+        Nodes must be the integers 0 through U.shape[1] - 1, with node k
+        corresponding to U[:, k], regardless of insertion order.
 
     Returns
     -------
     scipy.sparse.csc_array
-        Estimated precision matrix.
+        Estimated precision matrix in U's column order.
+
+    Raises
+    ------
+    ValueError
+        If the graph nodes do not match the data columns.
     """
     _, p = U.shape
-    assert len(Graph_u.nodes) == p, "nodes in graph equals columns of data"
+    _validate_graph_nodes(Graph_u, p)
 
     # Step 1: Cholesky factor of the dependency graph Graph_u
     # -------------------------------------------------------
 
     # Create pos. def. matrix with same sparsity structure as Prec
     SPD_Prec = nx.to_scipy_sparse_array(
-        Graph_u, weight=None, dtype=np.dtype(np.float64), format="csc"
+        Graph_u,
+        nodelist=range(p),
+        weight=None,
+        dtype=np.dtype(np.float64),
+        format="csc",
     )
     # Use Gershgorin circle theorem to ensure positive definite
     # All eigenvalues are in a circle centered at max_degree+1.0
@@ -367,23 +395,30 @@ def fit_precision_cholesky_approximate(
     akin to a Vecchia approximation, which is alleviated by the neighbourhood
     expansion.
 
-    No permutation optimisation is performed. It is beneficial if U and G have
-    a "sensible" ordering. This may e.g. be that neighbours defined by G are
-    close in U.
+    No permutation optimisation is performed. It is beneficial if U and Graph_u
+    have a "sensible" ordering. This may e.g. be that neighbours defined by Graph_u
+    are close in U. This refers to numeric node labels, not graph insertion order.
 
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters)
-    G : networkx.Graph
+        The data matrix with shape (samples, parameters).
+    Graph_u : networkx.Graph
         Graph representing non-zero structure in the precision matrix.
+        Nodes must be the integers 0 through U.shape[1] - 1, with node k
+        corresponding to U[:, k], regardless of insertion order.
     neighbourhood_expansion: int, optional
         The number of hops to the new neighbourhood set
 
     Returns
     -------
     scipy.sparse.csc_array
-        The optimized sparse Cholesky factor of the precision matrix.
+        Estimated precision matrix in U's column order.
+
+    Raises
+    ------
+    ValueError
+        If the graph nodes do not match the data columns.
     """
     # The k'th power is a "neighborhood expansion", see docs of nx.power
     G = nx.power(Graph_u, k=neighbourhood_expansion)
