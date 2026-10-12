@@ -12,9 +12,8 @@ import time
 
 import networkx as nx
 import numpy as np
-import scipy.sparse as sp
 from numpy.typing import NDArray
-from scipy.sparse import csc_array, tril
+from scipy.sparse import csc_array, csr_array, tril
 from sksparse.cholmod import cholesky
 from tqdm import tqdm
 
@@ -36,6 +35,7 @@ def reverse_cholesky(
 
     Examples
     --------
+    >>> import scipy.sparse as sp
     >>> F = sp.random_array(shape=(10, 10), density=0.2, rng=42, format='csc')
     >>> A = F @ F.T
     >>> A.setdiag(10)
@@ -141,6 +141,53 @@ def _validate_graph_nodes(G: nx.Graph, p: int) -> None:
         )
 
 
+def _fit_sparse_affine_kr_map(
+    U: NDArray[np.floating],
+    C: csr_array,
+    use_tqdm: bool,
+    *,
+    overwrite_u: bool = False,
+) -> csc_array:
+    """Fit a privately owned lower-triangular CSR pattern in place.
+
+    Each row's diagonal must be first or last; conditioning order is preserved.
+    With overwrite_u=True, U must also be private and writable.
+    """
+    log.info("Starting statistical fitting of precision")
+
+    n, p = U.shape
+    assert n > 1
+
+    mu = U.mean(axis=0, keepdims=True)
+    sigma = U.std(axis=0)
+    U_std = U.astype(mu.dtype, copy=not overwrite_u)
+    U_std -= mu
+    U_std /= sigma[None, :]
+
+    loop_function = (
+        tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
+        if use_tqdm
+        else range(p)
+    )
+    for k in loop_function:
+        start, end = C.indptr[k : k + 2]
+        columns = C.indices[start:end]
+        if columns[0] == k:
+            # Move the diagonal last without sorting the conditioning columns.
+            columns[:-1] = columns[1:]
+            columns[-1] = k
+
+        off_diag_std, diag_value_std = solve_row_closed_form(
+            U_reduced=U_std[:, columns],
+            lambda_l2=2.0 * len(columns),
+        )
+        C.data[start : end - 1] = off_diag_std / sigma[columns[:-1]]
+        C.data[end - 1] = diag_value_std / sigma[k]
+
+    C.eliminate_zeros()
+    return C.tocsc()
+
+
 def optimize_sparse_affine_kr_map(
     U: NDArray[np.floating],
     G: nx.Graph,
@@ -152,7 +199,7 @@ def optimize_sparse_affine_kr_map(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters).
+        The data matrix with shape (samples, parameters). It is not modified.
     G : networkx.Graph
         The graph representing the non-zero structure in C, where C.T @ C = Prec.
         Nodes must be the integers 0 through U.shape[1] - 1, with node k
@@ -248,45 +295,22 @@ def optimize_sparse_affine_kr_map(
     >>> np.allclose(Prec_est, Prec_est2)
     True
     """
-    log.info("Starting statistical fitting of precision")
-
     n, p = U.shape
     assert n > 1
     _validate_graph_nodes(G, p)
 
-    # Standardize data U to have zero mean, unit variance
-    mu = U.mean(axis=0, keepdims=True)
-    sigma = U.std(axis=0)
-    U_std = (U - mu) / sigma[None, :]
-
-    C_full = sp.lil_array((p, p))  # lil_array for efficient row operations
-    loop_function = (
-        tqdm(range(p), desc="Learning precision Cholesky factor row-by-row")
-        if use_tqdm
-        else range(p)
+    indptr = np.empty(p + 1, dtype=np.intp)
+    indptr[0] = 0
+    for k in range(p):
+        indptr[k + 1] = indptr[k] + sum(j < k for j in G.neighbors(k)) + 1
+    indices = np.empty(indptr[-1], dtype=np.intp)
+    for k in range(p):
+        indices[indptr[k] : indptr[k + 1]] = [j for j in G.neighbors(k) if j < k] + [k]
+    pattern = csr_array(
+        (np.empty(len(indices)), indices, indptr),
+        shape=(p, p),
     )
-
-    for k in loop_function:
-        non_zero_indices = [j for j in G.neighbors(k) if j < k] + [k]
-
-        # Extract the reduced version of U
-        U_reduced = U_std[:, non_zero_indices]
-
-        # Optimization for reduced C_k
-        lambda_l2_aic = 2.0 * len(non_zero_indices)
-        off_diag_std, diag_value_std = solve_row_closed_form(
-            U_reduced=U_reduced,
-            lambda_l2=lambda_l2_aic,
-        )
-
-        # Unscale the row back to original coordinates
-        if len(non_zero_indices) > 1:
-            cols_off = non_zero_indices[:-1]
-            C_full[k, cols_off] = off_diag_std / sigma[cols_off]
-        C_full[k, k] = diag_value_std / sigma[k]
-
-    # Convert to csc_array for efficient storage and arithmetic operations
-    return C_full.tocsc()
+    return _fit_sparse_affine_kr_map(U, pattern, use_tqdm)
 
 
 def fit_precision_cholesky(
@@ -303,7 +327,7 @@ def fit_precision_cholesky(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters).
+        The data matrix with shape (samples, parameters). It is not modified.
     Graph_u : networkx.Graph
         Graph representing non-zero structure in the precision matrix.
         Nodes must be the integers 0 through U.shape[1] - 1, with node k
@@ -345,12 +369,8 @@ def fit_precision_cholesky(
     )
     end = time.perf_counter()
     log.info("Cholesky of precision matrix took %.2f seconds", end - start)
-    Graph_C = nx.from_scipy_sparse_array(C_pattern)
     log.info("Parameters in precision: %s\n", tril(SPD_Prec).nnz)
-    log.info("Parameters in Cholesky factor: %s", Graph_C.number_of_edges())
-
-    inverse_perm = np.empty_like(permutation_idx)
-    inverse_perm[permutation_idx] = np.arange(len(permutation_idx))
+    log.info("Parameters in Cholesky factor: %s", C_pattern.nnz)
 
     # Step 2: Estimate non-zeros of C, the (reverse) Cholesky factor
     # --------------------------------------------------------------
@@ -358,12 +378,13 @@ def fit_precision_cholesky(
     # The function 'reverse_cholesky' above has found a C that is a factor
     # of a permuted Graph_u (not the original one), so we must permute U too.
     # Why permute at all? To have as many zeroes as possible in C.
-    U_perm = U[:, permutation_idx]
-    C = optimize_sparse_affine_kr_map(
-        U=U_perm,
-        G=Graph_C,
+    C = _fit_sparse_affine_kr_map(
+        U=U[:, permutation_idx],
+        C=csr_array(C_pattern),
         use_tqdm=use_tqdm,
+        overwrite_u=True,
     )
+    del C_pattern
 
     # Compute log-determinant of estimate
     prec_logdet = 2.0 * np.sum(np.log(C.diagonal()))
@@ -402,7 +423,7 @@ def fit_precision_cholesky_approximate(
     Parameters
     ----------
     U : np.ndarray
-        The data matrix with shape (samples, parameters).
+        The data matrix with shape (samples, parameters). It is not modified.
     Graph_u : networkx.Graph
         Graph representing non-zero structure in the precision matrix.
         Nodes must be the integers 0 through U.shape[1] - 1, with node k
