@@ -142,6 +142,184 @@ def test_snapshot_fit_precision_cholesky():
     np.testing.assert_allclose(entries_at_zero[::9], desired, atol=1e-8)
 
 
+def test_that_precision_estimation_is_independent_of_graph_insertion_order():
+    graph = nx.convert_node_labels_to_integers(nx.grid_2d_graph(3, 4))
+    reordered_graph = nx.Graph()
+    reordered_graph.add_nodes_from([0, 1, 4, 2, 5, 3, 6, 7, 8, 9, 10, 11])
+    reordered_graph.add_edges_from(graph.edges)
+
+    rng = np.random.default_rng(42)
+    U = rng.normal(size=(100, 12))
+
+    precision = precest.fit_precision_cholesky(
+        U, graph, ordering_method="natural", use_tqdm=False
+    )
+    reordered_precision = precest.fit_precision_cholesky(
+        U, reordered_graph, ordering_method="natural", use_tqdm=False
+    )
+
+    np.testing.assert_allclose(
+        precision.toarray(), reordered_precision.toarray(), rtol=1e-12, atol=1e-12
+    )
+
+
+@pytest.mark.parametrize(
+    "nodes",
+    [
+        pytest.param([0, 1], id="missing-node"),
+        pytest.param([0, 1, 2, 3], id="extra-node"),
+        pytest.param([0, 1, 3], id="noncontiguous-labels"),
+        pytest.param(["0", "1", "2"], id="string-labels"),
+        pytest.param([0.0, 1.0, 2.0], id="float-labels"),
+    ],
+)
+@pytest.mark.parametrize(
+    "fit_precision",
+    [
+        precest.fit_precision_cholesky,
+        precest.fit_precision_cholesky_approximate,
+    ],
+)
+def test_that_precision_estimation_rejects_graph_nodes_that_do_not_match_columns(
+    nodes, fit_precision
+):
+    rng = np.random.default_rng(42)
+    U = rng.normal(size=(20, 3))
+    graph = nx.path_graph(nodes)
+
+    with pytest.raises(ValueError, match="Graph nodes must be integers"):
+        fit_precision(U, graph, use_tqdm=False)
+
+
+def fit_graph_row_reference(U, graph):
+    sigma = U.std(axis=0)
+    standardized = (U - U.mean(axis=0, keepdims=True)) / sigma[None, :]
+    factor = np.zeros((U.shape[1], U.shape[1]))
+    for k in range(U.shape[1]):
+        columns = [j for j in graph.neighbors(k) if j < k] + [k]
+        off_diagonal, diagonal = precest.solve_row_closed_form(
+            standardized[:, columns], lambda_l2=2.0 * len(columns)
+        )
+        factor[k, columns[:-1]] = off_diagonal / sigma[columns[:-1]]
+        factor[k, k] = diagonal / sigma[k]
+    return factor
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("ordering_method", ["natural", "amd", None])
+@pytest.mark.parametrize(
+    "graph",
+    [
+        pytest.param(nx.empty_graph(12), id="isolated"),
+        pytest.param(
+            nx.disjoint_union(nx.path_graph(6), nx.empty_graph(6)), id="disconnected"
+        ),
+        pytest.param(
+            nx.convert_node_labels_to_integers(nx.grid_2d_graph(3, 4)), id="grid"
+        ),
+        pytest.param(nx.complete_graph(12), id="dense"),
+    ],
+)
+def test_precision_and_gain_match_graph_row_reference(dtype, ordering_method, graph):
+    p = len(graph)
+    reordered_graph = nx.Graph()
+    reordered_graph.add_nodes_from(reversed(range(p)))
+    reordered_graph.add_edges_from(reversed(list(graph.edges)))
+    rng = np.random.default_rng(42)
+    U = (
+        rng.normal(size=(9, p)) * np.linspace(0.5, 3, p) + np.linspace(-2, 2, p)
+    ).astype(dtype)
+    original = U.copy()
+
+    if ordering_method is None:
+        factor_graph = nx.power(reordered_graph, 2)
+        permutation = np.arange(p)
+        reference_data = U
+        precision = precest.fit_precision_cholesky_approximate(
+            U, reordered_graph, use_tqdm=False
+        )
+    else:
+        pattern = nx.to_scipy_sparse_array(
+            reordered_graph, nodelist=range(p), weight=None, dtype=float, format="csc"
+        )
+        pattern.setdiag(max(dict(reordered_graph.degree()).values()) + 1.0)
+        factor_pattern, permutation = precest.reverse_cholesky(
+            pattern, ordering_method=ordering_method
+        )
+        factor_graph = nx.from_scipy_sparse_array(factor_pattern)
+        reference_data = U[:, permutation]
+        precision = precest.fit_precision_cholesky(
+            U, reordered_graph, ordering_method=ordering_method, use_tqdm=False
+        )
+
+    factor = fit_graph_row_reference(reference_data, factor_graph)
+    inverse = np.argsort(permutation)
+    expected = (factor.T @ factor)[np.ix_(inverse, inverse)]
+    assert isinstance(precision, sp.sparse.sparray)
+    assert precision.dtype == np.float64
+    np.testing.assert_allclose(precision.toarray(), expected, rtol=1e-12, atol=1e-12)
+    np.testing.assert_array_equal(U, original)
+
+    H = np.eye(p)[[0, p // 2, p - 1]]
+    B = H.T @ np.diag([0.5, 1.0, 2.0])
+    gain = np.linalg.solve(precision.toarray() + B @ H, B)
+    expected_gain = np.linalg.solve(expected + B @ H, B)
+    np.testing.assert_allclose(gain, expected_gain, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("layout", ["C", "F", "strided", "read-only"])
+def test_graph_row_fitting_preserves_input_and_matches_reference(dtype, layout):
+    graph = nx.Graph()
+    graph.add_nodes_from(range(4))
+    graph.add_weighted_edges_from([(2, 1, 0), (2, 0, -1), (1, 0, 2), (0, 0, 0)])
+    rng = np.random.default_rng(42)
+    U = (rng.normal(size=(40, 4)) * [0.5, 2, 3, 10] + [1, 2, 3, 4]).astype(dtype)
+    if layout == "F":
+        U = np.asfortranarray(U)
+    elif layout == "strided":
+        U = U[::2]
+    elif layout == "read-only":
+        U.flags.writeable = False
+    original = U.copy()
+
+    expected = fit_graph_row_reference(U, graph)
+    factor = precest.optimize_sparse_affine_kr_map(U, graph, use_tqdm=False)
+
+    assert isinstance(factor, sp.sparse.csc_array)
+    assert factor.dtype == np.float64
+    np.testing.assert_allclose(factor.toarray(), expected, rtol=1e-12, atol=1e-12)
+    np.testing.assert_array_equal(U, original)
+
+
+def test_graph_row_fitting_does_not_store_zero_coefficients():
+    U = np.array([[-1, -1, 1], [-1, 1, -1], [1, -1, -1], [1, 1, 1]], dtype=float)
+    factor = precest.optimize_sparse_affine_kr_map(
+        U, nx.complete_graph(3), use_tqdm=False
+    )
+
+    np.testing.assert_array_equal(factor.toarray(), np.eye(3))
+    assert factor.nnz == 3
+
+
+@pytest.mark.parametrize("use_tqdm", [False, True])
+@pytest.mark.parametrize(
+    "fit",
+    [
+        precest.optimize_sparse_affine_kr_map,
+        precest.fit_precision_cholesky,
+        precest.fit_precision_cholesky_approximate,
+    ],
+)
+def test_precision_fitting_respects_progress_setting(fit, use_tqdm, capsys):
+    U = np.random.default_rng(42).normal(size=(20, 4))
+    fit(U, nx.path_graph(4), use_tqdm=use_tqdm)
+
+    assert (
+        "Learning precision Cholesky factor row-by-row" in capsys.readouterr().err
+    ) == use_tqdm
+
+
 def test_snapshot_fit_precision_cholesky_approximate():
 
     U, Graph_u, G_matrix = get_precision_data()
