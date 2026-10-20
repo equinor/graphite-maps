@@ -16,7 +16,7 @@ jobs:
   build-wheels-macos:
     strategy:
       matrix:
-        python-version: [ '3.12', '3.13', '3.14']
+        python-version: [ '3.12', '3.13', '3.14', '3.15' ]
       fail-fast: false
     runs-on: macos-26
     steps:
@@ -81,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ '3.12', '3.13', '3.14']
+        python-version: [ '3.12', '3.13', '3.14', '3.15' ]
     runs-on: macos-26
 
     steps:
