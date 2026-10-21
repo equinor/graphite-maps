@@ -42,20 +42,7 @@ jobs:
           fi
 
       - name: build-wheels-linux
-        if: matrix.arch == 'x86_64'
-        uses: docker://quay.io/pypa/manylinux_2_28_x86_64
-        env:
-          IS_TAG: ${{ env.IS_TAG }}
-          PYTHON_VERSION: ${{ matrix.python-version }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-
-        with:
-          entrypoint: /bin/bash
-          args: '-c "sh wheel_build_scripts/build_wheels_linux.sh"'
-
-      - name: build-wheels-linux-aarch64
-        if: matrix.arch == 'aarch64'
-        uses: docker://quay.io/pypa/manylinux_2_28_aarch64
+        uses: docker://quay.io/pypa/manylinux_2_28
         env:
           IS_TAG: ${{ env.IS_TAG }}
           PYTHON_VERSION: ${{ matrix.python-version }}
