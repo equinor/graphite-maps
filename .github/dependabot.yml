@@ -9,11 +9,6 @@ updates:
       github-actions:
         patterns:
           - "*"
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
 
   - package-ecosystem: "uv"
     directory: "/"
